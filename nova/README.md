@@ -20,16 +20,18 @@ Phase 1 is built and verified on hardware — a Redmi Note 10 (`M2101K7AI`), And
 | Anything else ("explain quantum computing") | **No** | Declines — needs the LLM engine |
 
 Phase 2 adds the commands that need the accessibility service. They require the user to switch
-Nova on under Settings → Accessibility:
+Nova on under Settings → Accessibility. All verified on the same device, driving MIUI's Settings
+app from the background:
 
-| Command | Notes |
+| Command | Verified |
 | --- | --- |
-| "Go back", "lock the phone" | Lock needs Android 9+ |
-| "Take a screenshot" | Needs Android 11+ |
-| "Show recent apps", "open notifications" | |
-| "Tap send", "click the login button" | Fuzzy-matched against on-screen labels; confirms what it pressed |
-| "Scroll down", "swipe left" | |
-| "Type I'm reaching in 10 minutes" | Punctuation and casing preserved |
+| "Go back" | Yes — returned from Battery to Settings |
+| "Lock the phone" | Yes — screen went `ON → OFF`, `mDreamingLockscreen=true` (needs Android 9+) |
+| "Take a screenshot" | Yes — file written to `DCIM/Screenshots` (needs Android 11+) |
+| "Show recent apps", "open notifications" | Yes |
+| "Tap Battery", "tap search settings" | Yes — navigated to the Battery screen, focused the search box |
+| "Scroll down" | Yes — scrolled Settings while Nova stayed backgrounded |
+| "Type battery saver" | Yes — text landed in the field and returned real results |
 | "Close Chrome" | Goes home — Android has no API to close another app |
 
 **The voice path is verified.** Tapping the mic and saying "open YouTube" transcribed correctly
@@ -57,6 +59,17 @@ adb shell am start -n com.nova.assistant/.MainActivity -e command "'open youtube
 Note the nested quotes — `adb shell` splits on spaces, so an unquoted command arrives truncated.
 The extra is ignored in release builds: `MainActivity` is exported, and an open command channel
 into the assistant is not something to ship.
+
+Cross-app commands need the other form, because `am start` would make Nova the foreground app and
+"tap send" would then search Nova's own screen:
+
+```bash
+adb shell am broadcast -p com.nova.assistant -a com.nova.assistant.COMMAND -e command "'scroll down'"
+adb logcat -s NovaCommand:I     # what Nova understood and what it answered
+```
+
+`NovaCommandReceiver` lives in the `debug` source set, so it and its manifest entry are absent
+from a release build entirely rather than relying on a runtime flag.
 
 ## Running it
 
@@ -122,7 +135,12 @@ These are real, and none of them are hidden behind a silent failure:
   root. "Close Chrome" goes home and says so, rather than implying the app was killed.
 - **Tapping confirms out loud.** A fuzzy match against on-screen labels that silently hits the
   wrong control in a banking app is the worst thing Nova could do, so a successful tap always
-  reports which label it pressed.
+  reports which label it pressed. That confirmation is what caught the bug below.
+- **Accessible names are not the visible text.** MIUI's Settings search box reads "Search
+  settings" on screen but is named `Search` to accessibility, and its hint is not exposed at
+  all. Tapping therefore searches actionable nodes first and only falls back to inert ones —
+  without that, the page heading "Settings" outscored the real search box. Headings must never
+  beat buttons when the whole point is to press something.
 - **The accessibility service reads nothing in the background.** `onAccessibilityEvent` is
   deliberately empty; every screen read is pull-based, triggered by a command the user gave.
 - **`QUERY_ALL_PACKAGES`** is declared so "open anything" can work. Play Store requires a declared

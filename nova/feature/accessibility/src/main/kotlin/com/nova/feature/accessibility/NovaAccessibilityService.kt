@@ -81,10 +81,18 @@ class NovaAccessibilityService : AccessibilityService() {
     fun tapLabel(query: String): TapResult {
         val root = rootInActiveWindow ?: return TapResult.NoWindow
 
-        val candidates = ScreenNodes.visible(root).filter { ScreenNodes.label(it).isNotBlank() }
-        if (candidates.isEmpty()) return TapResult.NotFound
+        val labelled = ScreenNodes.visible(root).filter { ScreenNodes.label(it).isNotBlank() }
+        if (labelled.isEmpty()) return TapResult.NotFound
 
-        val match = FuzzyMatcher.best(query, candidates) { ScreenNodes.label(it) }
+        // Actionable nodes are searched first, and only if none match do inert ones get a
+        // look. Without this a page title outranks a real control: on MIUI's Settings screen
+        // the search box is named "Search", so "tap search settings" scored the heading
+        // "Settings" higher and reported it wasn't tappable. Headings should never beat
+        // buttons when the whole point is to press something.
+        val actionable = labelled.filter { ScreenNodes.clickable(it) != null }
+
+        val match = FuzzyMatcher.best(query, actionable) { ScreenNodes.label(it) }
+            ?: FuzzyMatcher.best(query, labelled) { ScreenNodes.label(it) }
             ?: return TapResult.NotFound
 
         val target = ScreenNodes.clickable(match) ?: return TapResult.NotClickable(ScreenNodes.label(match))
