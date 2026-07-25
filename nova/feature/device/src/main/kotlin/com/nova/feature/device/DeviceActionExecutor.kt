@@ -11,10 +11,9 @@ import kotlinx.coroutines.withContext
 /**
  * Executes the actions a plain app can perform without special privileges.
  *
- * The actions this deliberately refuses — back, close, lock, screenshot — are the ones Android
- * only exposes to an AccessibilityService. They are declined with a straight answer rather than
- * a silent no-op, and picked up by the Phase 2 accessibility executor registered alongside this
- * one.
+ * The actions this does not claim — back, close, lock, screenshot, tap, scroll, type — are the
+ * ones Android only exposes to an AccessibilityService, and belong to
+ * `AccessibilityActionExecutor` in `:feature:accessibility`.
  */
 class DeviceActionExecutor(
     private val controller: DeviceController,
@@ -97,28 +96,3 @@ class DeviceActionExecutor(
     }
 }
 
-/**
- * Answers for the actions that need an AccessibilityService, until Phase 2 builds one.
- *
- * Registered last, after [DeviceActionExecutor], so it only ever sees what nothing else claimed.
- * Its whole job is to make "lock the phone" say why it can't rather than fail silently — and to
- * be deleted the day `:feature:accessibility` lands.
- */
-class UnsupportedActionExecutor : ActionExecutor {
-
-    override val name: String = "not-yet-implemented"
-
-    override fun canHandle(action: NovaAction): Boolean = when (action) {
-        NovaAction.GoBack,
-        NovaAction.LockScreen,
-        NovaAction.TakeScreenshot,
-        is NovaAction.CloseApp,
-        -> true
-
-        else -> false
-    }
-
-    override suspend fun execute(action: NovaAction): ActionResult = ActionResult.Failure(
-        "That needs the accessibility service, which isn't built yet.",
-    )
-}

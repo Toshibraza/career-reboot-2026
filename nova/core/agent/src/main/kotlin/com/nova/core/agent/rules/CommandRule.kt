@@ -11,12 +11,34 @@ import com.nova.core.agent.NovaAction
  */
 internal class RuleMatch(
     val text: String,
+    /**
+     * The utterance as spoken, before normalisation.
+     *
+     * Rules that dictate content rather than name a target need this: "type hello, how are
+     * you?" must keep its punctuation, which [text] has already stripped.
+     */
+    val raw: String,
     private val match: MatchResult,
     val context: AgentContext,
 ) {
     fun group(index: Int): String = match.groupValues.getOrElse(index) { "" }
 
     fun contains(pattern: String): Boolean = Regex(pattern).containsMatchIn(text)
+
+    /**
+     * Pulls the tail of the raw utterance after whichever of [leadIns] it starts with, so
+     * dictated text survives with its original casing and punctuation.
+     */
+    fun rawAfter(vararg leadIns: String): String? {
+        val trimmed = raw.trim()
+        val lowered = trimmed.lowercase()
+        for (leadIn in leadIns) {
+            val prefix = "$leadIn "
+            val at = lowered.indexOf(prefix)
+            if (at >= 0) return trimmed.substring(at + prefix.length).trim().ifEmpty { null }
+        }
+        return null
+    }
 }
 
 /**
@@ -31,9 +53,9 @@ internal class CommandRule(
     private val pattern: Regex,
     private val build: (RuleMatch) -> List<NovaAction>?,
 ) {
-    fun apply(text: String, context: AgentContext): List<NovaAction>? {
+    fun apply(text: String, raw: String, context: AgentContext): List<NovaAction>? {
         val match = pattern.find(text) ?: return null
-        return build(RuleMatch(text, match, context))
+        return build(RuleMatch(text, raw, match, context))
     }
 }
 

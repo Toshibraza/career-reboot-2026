@@ -3,6 +3,7 @@ package com.nova.core.agent.rules
 import com.nova.core.agent.AgentContext
 import com.nova.core.agent.LevelChange
 import com.nova.core.agent.NovaAction
+import com.nova.core.agent.ScrollDirection
 import com.nova.core.agent.VolumeStream
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -125,6 +126,54 @@ class RuleIntentEngineTest {
     fun `does not mistake app names for navigation`() {
         assertEquals(NovaAction.OpenApp("google home"), parse("open google home"))
         assertEquals(NovaAction.OpenApp("lock screen"), parse("open lock screen app"))
+    }
+
+    // --- On-screen control -------------------------------------------------------------
+
+    @Test
+    fun `taps a labelled control`() {
+        assertEquals(NovaAction.TapLabel("send"), parse("tap send"))
+        assertEquals(NovaAction.TapLabel("login"), parse("click the login button"))
+        assertEquals(NovaAction.TapLabel("continue"), parse("press on continue"))
+    }
+
+    @Test
+    fun `scrolls in a named direction`() {
+        assertEquals(NovaAction.ScrollScreen(ScrollDirection.DOWN), parse("scroll down"))
+        assertEquals(NovaAction.ScrollScreen(ScrollDirection.UP), parse("scroll up a bit"))
+        assertEquals(NovaAction.ScrollScreen(ScrollDirection.LEFT), parse("swipe left"))
+    }
+
+    @Test
+    fun `scroll without a direction declines`() = runTest {
+        val plan = engine.plan("scroll", AgentContext())
+        assertTrue(plan.actions.single() is NovaAction.Unsupported)
+    }
+
+    @Test
+    fun `dictated text keeps its punctuation and casing`() {
+        // The normalised utterance has already lost the comma and question mark, so the rule
+        // has to recover the text from the raw utterance or the message is sent mangled.
+        assertEquals(
+            NovaAction.TypeText("Hello, how are you?"),
+            parse("type Hello, how are you?"),
+        )
+        assertEquals(
+            NovaAction.TypeText("I'm reaching in 10 minutes"),
+            parse("write I'm reaching in 10 minutes"),
+        )
+    }
+
+    @Test
+    fun `opens recents and notifications`() {
+        assertEquals(NovaAction.OpenRecents, parse("show recent apps"))
+        assertEquals(NovaAction.OpenNotifications, parse("open my notifications"))
+    }
+
+    @Test
+    fun `screen control does not swallow app launches`() {
+        assertEquals(NovaAction.OpenApp("telegram"), parse("open telegram"))
+        assertEquals(NovaAction.OpenApp("press reader"), parse("open press reader"))
     }
 
     // --- Fallback ----------------------------------------------------------------------

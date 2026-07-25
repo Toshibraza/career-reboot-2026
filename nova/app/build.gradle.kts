@@ -42,6 +42,7 @@ dependencies {
     implementation(project(":core:agent"))
     implementation(project(":core:speech"))
     implementation(project(":feature:device"))
+    implementation(project(":feature:accessibility"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

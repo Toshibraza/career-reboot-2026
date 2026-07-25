@@ -2,10 +2,11 @@ package com.nova.feature.device
 
 import android.content.Context
 import android.content.Intent
+import com.nova.core.agent.match.FuzzyMatcher
 
 data class InstalledApp(val label: String, val packageName: String)
 
-/** Resolves what the user said into a package to launch. Scoring lives in [AppMatcher]. */
+/** Resolves what the user said into a package to launch. Scoring lives in [FuzzyMatcher]. */
 class AppRegistry(context: Context) {
 
     private val packageManager = context.applicationContext.packageManager
@@ -39,5 +40,5 @@ class AppRegistry(context: Context) {
 
     /** Best match for [query], or null when nothing is close enough to be worth launching. */
     fun resolve(query: String): InstalledApp? =
-        AppMatcher.best(query, installedApps()) { it.label }
+        FuzzyMatcher.best(query, installedApps()) { it.label }
 }

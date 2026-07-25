@@ -17,8 +17,20 @@ Phase 1 is built and verified on hardware — a Redmi Note 10 (`M2101K7AI`), And
 | "Who are you", "hello" | Yes | Yes |
 | Spoken "open YouTube" via the mic button | Yes | Yes — transcribed on-device, no network |
 | "Open zqxwv" (gibberish) | Declines | Yes — "I couldn't find an app called zqxwv" |
-| "Lock the phone", "screenshot", "go back", "close Chrome" | **No** | Declines with a reason — needs Phase 2 |
 | Anything else ("explain quantum computing") | **No** | Declines — needs the LLM engine |
+
+Phase 2 adds the commands that need the accessibility service. They require the user to switch
+Nova on under Settings → Accessibility:
+
+| Command | Notes |
+| --- | --- |
+| "Go back", "lock the phone" | Lock needs Android 9+ |
+| "Take a screenshot" | Needs Android 11+ |
+| "Show recent apps", "open notifications" | |
+| "Tap send", "click the login button" | Fuzzy-matched against on-screen labels; confirms what it pressed |
+| "Scroll down", "swipe left" | |
+| "Type I'm reaching in 10 minutes" | Punctuation and casing preserved |
+| "Close Chrome" | Goes home — Android has no API to close another app |
 
 **The voice path is verified.** Tapping the mic and saying "open YouTube" transcribed correctly
 and launched the app. Notably, the platform honoured `EXTRA_PREFER_OFFLINE` and used Google's
@@ -74,9 +86,10 @@ Four modules, split so that each capability can be replaced without touching the
 
 | Module | Type | Contains |
 | --- | --- | --- |
-| `:core:agent` | **pure JVM** | Actions, plans, `IntentEngine`, `ActionExecutor`, `AgentRuntime`, the rule engine |
+| `:core:agent` | **pure JVM** | Actions, plans, `IntentEngine`, `ActionExecutor`, `AgentRuntime`, the rule engine, `FuzzyMatcher` |
 | `:core:speech` | Android lib | `SpeechToText`, `Speaker`, `WakeWordDetector` + platform implementations |
 | `:feature:device` | Android lib | `AppRegistry`, `DeviceController`, `DeviceActionExecutor` |
+| `:feature:accessibility` | Android lib | `NovaAccessibilityService`, `ScreenNodes`, `AccessibilityActionExecutor` |
 | `:app` | Android app | Compose UI, ViewModel, foreground service, composition root |
 
 `:core:agent` has no Android dependency at all. That is what makes the rule engine testable in
@@ -90,9 +103,10 @@ deterministic, offline, zero cost. An LLM engine implements the same interface, 
 Swapping it is one line in [NovaContainer.kt](app/src/main/kotlin/com/nova/assistant/NovaContainer.kt).
 
 **`ActionExecutor`** — carries out one class of action. Executors are a registered list probed in
-order, never a `when` block. Adding the Phase 2 accessibility service means writing a new executor
-and adding it to that list; `UnsupportedActionExecutor` is the placeholder that currently answers
-for what it will take over.
+order, never a `when` block. Phase 2 proved this out: the accessibility service arrived as one new
+class plus one line in `NovaContainer`, and the placeholder it replaced was deleted outright. No
+existing executor changed. Every action has exactly one owner, so the list order is documentation
+rather than precedence.
 
 ## Known limitations
 
@@ -104,7 +118,13 @@ These are real, and none of them are hidden behind a silent failure:
   spotter (Porcupine or openWakeWord) on a small audio ring buffer — same interface, new class.
 - **Background activity starts.** Android 10+ blocks starting activities from the background, so
   "open YouTube" spoken to the always-listening service with the app off-screen may do nothing.
-  The accessibility service in Phase 2 removes this constraint.
+- **Nothing can close another app.** Force-stop is reserved for the system, a device owner, or
+  root. "Close Chrome" goes home and says so, rather than implying the app was killed.
+- **Tapping confirms out loud.** A fuzzy match against on-screen labels that silently hits the
+  wrong control in a banking app is the worst thing Nova could do, so a successful tap always
+  reports which label it pressed.
+- **The accessibility service reads nothing in the background.** `onAccessibilityEvent` is
+  deliberately empty; every screen read is pull-based, triggered by a command the user gave.
 - **`QUERY_ALL_PACKAGES`** is declared so "open anything" can work. Play Store requires a declared
   justification for it.
 - Brightness writes the system-wide setting and disables auto-brightness to make the change stick.
@@ -117,11 +137,8 @@ These are real, and none of them are hidden behind a silent failure:
 
 ## Roadmap
 
-Phase 1 is done. The remaining phases, and where each one plugs in:
+Phases 1 and 2 are done. The remaining phases, and where each one plugs in:
 
-- **Phase 2 — Accessibility.** `:feature:accessibility` with an `AccessibilityActionExecutor`:
-  tap, scroll, type, back, lock, screenshot, and reading the notification stream. Delete
-  `UnsupportedActionExecutor` the day it lands.
 - **Phase 3 — Screen and camera understanding.** MediaProjection capture, ML Kit OCR, and an
   LLM-backed `IntentEngine` that plans multi-step tasks against what is on screen.
 - **Phase 4 — Memory and routines.** SQLite plus a vector store behind a `Memory` interface;

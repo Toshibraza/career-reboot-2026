@@ -49,6 +49,7 @@ import com.nova.core.agent.RequiredPermission
 fun NovaScreen(
     state: NovaUiState,
     micGranted: Boolean,
+    accessibilityEnabled: Boolean,
     alwaysListening: Boolean,
     onMicTap: () -> Unit,
     onSubmit: (String) -> Unit,
@@ -70,6 +71,17 @@ fun NovaScreen(
                     text = "Nova needs microphone access to hear you.",
                     button = "Grant",
                     onClick = onRequestMic,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // Offered up front rather than only after a command fails: without it, half of
+            // what Nova can do is invisible, and the user has no reason to go looking.
+            if (micGranted && !accessibilityEnabled && state.pendingPermission == null) {
+                ActionCard(
+                    text = "Turn on Nova's accessibility service to control other apps — tap, scroll, type, lock.",
+                    button = "Enable",
+                    onClick = { onOpenSettingsFor(RequiredPermission.ACCESSIBILITY_SERVICE) },
                 )
                 Spacer(Modifier.height(8.dp))
             }

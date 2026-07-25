@@ -5,6 +5,7 @@ import com.nova.core.agent.IntentEngine
 import com.nova.core.agent.LevelChange
 import com.nova.core.agent.NovaAction
 import com.nova.core.agent.Plan
+import com.nova.core.agent.ScrollDirection
 import com.nova.core.agent.VolumeStream
 
 /**
@@ -24,7 +25,7 @@ class RuleIntentEngine : IntentEngine {
         if (text.isEmpty()) return Plan.unsupported(utterance, "Nothing to parse.")
 
         for (rule in RULES) {
-            val actions = rule.apply(text, context)
+            val actions = rule.apply(text, utterance, context)
             if (!actions.isNullOrEmpty()) {
                 return Plan(utterance = utterance, actions = actions, confidence = 1f)
             }
@@ -103,6 +104,43 @@ class RuleIntentEngine : IntentEngine {
             simpleRule("screenshot", "\\bscreen ?shot\\b|\\bcapture (?:the )?screen\\b", NovaAction.TakeScreenshot),
             simpleRule("home", "^(?:go |take me )?(?:to )?home(?: screen)?$|\\bgo home\\b", NovaAction.GoHome),
             simpleRule("back", "\\bgo back\\b|^back$", NovaAction.GoBack),
+            simpleRule(
+                "recents",
+                "\\brecent apps?\\b|\\bapp switcher\\b|^recents$",
+                NovaAction.OpenRecents,
+            ),
+            simpleRule(
+                "notifications",
+                "\\bnotification (?:shade|panel)\\b|\\b(?:show|open|pull down) (?:my )?notifications\\b",
+                NovaAction.OpenNotifications,
+            ),
+
+            // --- On-screen control -------------------------------------------------------
+            // Registered before the app rules: these are all anchored on their own verbs, so
+            // they never collide with "open <app>", but keeping them adjacent to navigation
+            // makes the precedence obvious to whoever adds the next rule.
+            rule("type", "^(?:type|enter|write|input|dictate)\\s+(?:in\\s+)?(.+)$") {
+                val dictated = it.rawAfter("type", "enter", "write", "input", "dictate")
+                    ?: it.group(1)
+                dictated.takeIf(String::isNotBlank)?.let { text -> listOf(NovaAction.TypeText(text)) }
+            },
+
+            rule("scroll", "\\b(?:scroll|swipe|page)\\b") {
+                val direction = when {
+                    it.contains("\\b(?:down|downwards?)\\b") -> ScrollDirection.DOWN
+                    it.contains("\\b(?:up|upwards?)\\b") -> ScrollDirection.UP
+                    it.contains("\\bleft\\b") -> ScrollDirection.LEFT
+                    it.contains("\\bright\\b") -> ScrollDirection.RIGHT
+                    else -> return@rule null
+                }
+                listOf(NovaAction.ScrollScreen(direction))
+            },
+
+            rule("tap", "^(?:tap|click|press|select|touch|hit)\\s+(?:on\\s+)?(?:the\\s+)?(.+?)(?:\\s+button)?$") {
+                it.group(1).takeIf(String::isNotBlank)?.let { label ->
+                    listOf(NovaAction.TapLabel(label))
+                }
+            },
 
             // --- Apps --------------------------------------------------------------------
             simpleRule(

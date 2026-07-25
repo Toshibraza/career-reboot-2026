@@ -22,6 +22,26 @@ sealed interface NovaAction {
     /** Navigate back once. */
     data object GoBack : NovaAction
 
+    /** Show the recent-apps switcher. */
+    data object OpenRecents : NovaAction
+
+    /** Pull down the notification shade. */
+    data object OpenNotifications : NovaAction
+
+    /**
+     * Tap the on-screen control whose label best matches [label].
+     *
+     * The match is deliberately fuzzy — the input is a speech transcript — but it declines
+     * rather than guessing when nothing is close. Tapping the wrong button in someone's
+     * banking app is far worse than saying "I couldn't find that".
+     */
+    data class TapLabel(val label: String) : NovaAction
+
+    data class ScrollScreen(val direction: ScrollDirection) : NovaAction
+
+    /** Type [text] into whatever field currently has focus. */
+    data class TypeText(val text: String) : NovaAction
+
     data class SetFlashlight(val on: Boolean) : NovaAction
 
     data class SetVolume(val stream: VolumeStream, val level: LevelChange) : NovaAction
@@ -41,6 +61,13 @@ sealed interface NovaAction {
      * what users actually ask for.
      */
     data class Unsupported(val utterance: String, val reason: String) : NovaAction
+}
+
+enum class ScrollDirection {
+    UP,
+    DOWN,
+    LEFT,
+    RIGHT,
 }
 
 enum class VolumeStream {
