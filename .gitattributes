@@ -1,0 +1,11 @@
+# Normalise line endings so the repo stays clean across Windows and Linux checkouts.
+* text=auto eol=lf
+
+# Keep the Gradle wrapper usable on both.
+*.bat text eol=crlf
+gradlew text eol=lf
+
+# Never mangle binaries.
+*.jar binary
+*.png binary
+*.keystore binary

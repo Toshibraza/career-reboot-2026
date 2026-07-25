@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Brightness. Granted through a settings screen, not a runtime dialog. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+
+    <!--
+        Listing every launchable app is the whole point of "open <anything>", so the broad
+        query is justified here. Play Store requires a declared use for this permission.
+    -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+</manifest>

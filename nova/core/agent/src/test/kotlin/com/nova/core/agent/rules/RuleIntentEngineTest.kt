@@ -1,0 +1,145 @@
+package com.nova.core.agent.rules
+
+import com.nova.core.agent.AgentContext
+import com.nova.core.agent.LevelChange
+import com.nova.core.agent.NovaAction
+import com.nova.core.agent.VolumeStream
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class RuleIntentEngineTest {
+
+    private val engine = RuleIntentEngine()
+
+    // runBlocking, not runTest: runTest returns TestResult, and these helpers need the value.
+    private fun parse(utterance: String): NovaAction = runBlocking {
+        engine.plan(utterance, AgentContext()).actions.single()
+    }
+
+    // --- Apps --------------------------------------------------------------------------
+
+    @Test
+    fun `opens an app by name`() {
+        assertEquals(NovaAction.OpenApp("youtube"), parse("open YouTube"))
+        assertEquals(NovaAction.OpenApp("whatsapp"), parse("launch WhatsApp"))
+        assertEquals(NovaAction.OpenApp("calculator"), parse("start the calculator app"))
+    }
+
+    @Test
+    fun `strips the wake word and politeness`() {
+        assertEquals(NovaAction.OpenApp("camera"), parse("Hey Nova, please open the camera"))
+    }
+
+    @Test
+    fun `closes a named app and the current one`() {
+        assertEquals(NovaAction.CloseApp("chrome"), parse("close Chrome"))
+        assertEquals(NovaAction.CloseApp(""), parse("close app"))
+    }
+
+    // --- Torch -------------------------------------------------------------------------
+
+    @Test
+    fun `toggles the flashlight in both directions`() {
+        assertEquals(NovaAction.SetFlashlight(on = true), parse("turn on the flashlight"))
+        assertEquals(NovaAction.SetFlashlight(on = false), parse("turn off the torch"))
+    }
+
+    @Test
+    fun `torch beats the close-app rule`() {
+        assertEquals(NovaAction.SetFlashlight(on = false), parse("close the flashlight"))
+    }
+
+    // --- Volume ------------------------------------------------------------------------
+
+    @Test
+    fun `sets volume from digits and from words`() {
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.MEDIA, LevelChange.Absolute(50)),
+            parse("set volume to 50 percent"),
+        )
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.MEDIA, LevelChange.Absolute(70)),
+            parse("set the volume to seventy"),
+        )
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.MEDIA, LevelChange.Absolute(25)),
+            parse("set volume to twenty five"),
+        )
+    }
+
+    @Test
+    fun `steps volume up and down`() {
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.MEDIA, LevelChange.Relative(10)),
+            parse("volume up"),
+        )
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.MEDIA, LevelChange.Relative(-10)),
+            parse("turn the volume down"),
+        )
+    }
+
+    @Test
+    fun `routes to the stream named in the utterance`() {
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.RING, LevelChange.Min),
+            parse("mute the ringer"),
+        )
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.ALARM, LevelChange.Absolute(30)),
+            parse("set alarm volume to 30"),
+        )
+    }
+
+    @Test
+    fun `maxes the volume`() {
+        assertEquals(
+            NovaAction.SetVolume(VolumeStream.MEDIA, LevelChange.Max),
+            parse("max volume"),
+        )
+    }
+
+    // --- Brightness --------------------------------------------------------------------
+
+    @Test
+    fun `sets and steps brightness`() {
+        assertEquals(NovaAction.SetBrightness(LevelChange.Absolute(40)), parse("set brightness to 40"))
+        assertEquals(NovaAction.SetBrightness(LevelChange.Relative(20)), parse("increase brightness"))
+        assertEquals(NovaAction.SetBrightness(LevelChange.Relative(-20)), parse("dim the screen a bit"))
+    }
+
+    // --- Navigation --------------------------------------------------------------------
+
+    @Test
+    fun `handles device navigation`() {
+        assertEquals(NovaAction.LockScreen, parse("lock the phone"))
+        assertEquals(NovaAction.TakeScreenshot, parse("take a screenshot"))
+        assertEquals(NovaAction.GoHome, parse("go home"))
+        assertEquals(NovaAction.GoBack, parse("go back"))
+    }
+
+    @Test
+    fun `does not mistake app names for navigation`() {
+        assertEquals(NovaAction.OpenApp("google home"), parse("open google home"))
+        assertEquals(NovaAction.OpenApp("lock screen"), parse("open lock screen app"))
+    }
+
+    // --- Fallback ----------------------------------------------------------------------
+
+    @Test
+    fun `unknown commands are unsupported with zero confidence`() = runTest {
+        val plan = engine.plan("explain quantum computing to me", AgentContext())
+        assertEquals(0f, plan.confidence, 0.001f)
+        assertTrue(plan.actions.single() is NovaAction.Unsupported)
+    }
+
+    @Test
+    fun `set volume with no number declines rather than guessing`() = runTest {
+        val plan = engine.plan("set the volume", AgentContext())
+        // Falls through the absolute rule to the step rule, which also declines without a direction.
+        assertTrue(plan.actions.single() is NovaAction.Unsupported)
+    }
+}

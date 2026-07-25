@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Mic capsule -->
+    <path
+        android:fillColor="#7DD3FC"
+        android:pathData="M54,32c-4.4,0 -8,3.6 -8,8v14c0,4.4 3.6,8 8,8s8,-3.6 8,-8V40C62,35.6 58.4,32 54,32z" />
+
+    <!-- Listening arc -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M40,52h-5c0,9.6 7.2,17.5 16.5,18.8V78h-7v5h19v-5h-7v-7.2C66.8,69.5 74,61.6 74,52h-5c0,8.3 -6.7,15 -15,15S40,60.3 40,52z" />
+</vector>

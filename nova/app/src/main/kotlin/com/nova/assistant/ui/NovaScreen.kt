@@ -1,0 +1,335 @@
+package com.nova.assistant.ui
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.nova.core.agent.RequiredPermission
+
+@Composable
+fun NovaScreen(
+    state: NovaUiState,
+    micGranted: Boolean,
+    alwaysListening: Boolean,
+    onMicTap: () -> Unit,
+    onSubmit: (String) -> Unit,
+    onRequestMic: () -> Unit,
+    onOpenSettingsFor: (RequiredPermission) -> Unit,
+    onDismissPermissionPrompt: () -> Unit,
+    onAlwaysListeningChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.padding(20.dp)) {
+
+            Header(state.status)
+
+            Spacer(Modifier.height(12.dp))
+
+            if (!micGranted) {
+                ActionCard(
+                    text = "Nova needs microphone access to hear you.",
+                    button = "Grant",
+                    onClick = onRequestMic,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            state.pendingPermission?.let { permission ->
+                ActionCard(
+                    text = permission.explain(),
+                    button = "Open settings",
+                    onClick = {
+                        onOpenSettingsFor(permission)
+                        onDismissPermissionPrompt()
+                    },
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            AlwaysListeningRow(alwaysListening, micGranted, onAlwaysListeningChange)
+
+            Spacer(Modifier.height(12.dp))
+
+            Transcript(state, modifier = Modifier.weight(1f))
+
+            state.message?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+
+            CommandInput(onSubmit)
+
+            Spacer(Modifier.height(16.dp))
+
+            MicButton(
+                listening = state.status == NovaStatus.LISTENING,
+                level = state.level,
+                enabled = micGranted,
+                onTap = onMicTap,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun Header(status: NovaStatus) {
+    Column {
+        Text(
+            text = "Nova",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = when (status) {
+                NovaStatus.IDLE -> "Ready"
+                NovaStatus.LISTENING -> "Listening…"
+                NovaStatus.THINKING -> "Working on it…"
+                NovaStatus.SPEAKING -> "Speaking"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AlwaysListeningRow(
+    enabled: Boolean,
+    micGranted: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Always listening", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                // Said plainly, because the current detector really does cost battery.
+                text = "Wake on \"Nova\". Holds the mic open — heavy on battery for now.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = onChange, enabled = micGranted)
+    }
+}
+
+@Composable
+private fun Transcript(state: NovaUiState, modifier: Modifier = Modifier) {
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(state.turns.size) {
+        if (state.turns.isNotEmpty()) listState.animateScrollToItem(state.turns.lastIndex)
+    }
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        if (state.turns.isEmpty() && state.partial.isEmpty()) {
+            EmptyHint(Modifier.align(Alignment.Center))
+        } else {
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(state.turns) { turn -> TurnRow(turn) }
+            }
+        }
+
+        if (state.partial.isNotEmpty()) {
+            Text(
+                text = state.partial,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(vertical = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TurnRow(turn: Turn) {
+    Column {
+        Text(
+            text = turn.heard,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            text = turn.reply,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (turn.succeeded) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+        )
+    }
+}
+
+@Composable
+private fun EmptyHint(modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = "Try saying",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        listOf(
+            "Open YouTube",
+            "Turn on the flashlight",
+            "Set volume to 40 percent",
+            "Increase brightness",
+        ).forEach {
+            Text(
+                text = "“$it”",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CommandInput(onSubmit: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            placeholder = { Text("Type a command") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        IconButton(
+            onClick = {
+                onSubmit(text)
+                text = ""
+            },
+            enabled = text.isNotBlank(),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send command")
+        }
+    }
+}
+
+@Composable
+private fun MicButton(
+    listening: Boolean,
+    level: Float,
+    enabled: Boolean,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // The button breathes with mic level, so it is obvious at a glance that audio is arriving.
+    val scale by animateFloatAsState(
+        targetValue = if (listening) 1f + level * 0.25f else 1f,
+        label = "mic-pulse",
+    )
+
+    Box(
+        modifier = modifier
+            .scale(scale)
+            .size(84.dp)
+            .clip(CircleShape)
+            .background(
+                if (listening) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        IconButton(onClick = onTap, enabled = enabled, modifier = Modifier.fillMaxSize()) {
+            Icon(
+                imageVector = if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
+                contentDescription = if (listening) "Stop listening" else "Start listening",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(34.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionCard(text: String, button: String, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onClick) { Text(button) }
+        }
+    }
+}
+
+private fun RequiredPermission.explain(): String = when (this) {
+    RequiredPermission.WRITE_SYSTEM_SETTINGS -> "Allow Nova to modify system settings to control brightness."
+    RequiredPermission.DO_NOT_DISTURB -> "Allow Do Not Disturb access so Nova can silence the ringer."
+    RequiredPermission.RECORD_AUDIO -> "Nova needs microphone access."
+    RequiredPermission.CAMERA -> "Nova needs camera access."
+    RequiredPermission.ACCESSIBILITY_SERVICE -> "Turn on Nova's accessibility service to control other apps."
+    RequiredPermission.NOTIFICATION_LISTENER -> "Allow notification access so Nova can read notifications."
+    RequiredPermission.USAGE_STATS -> "Allow usage access so Nova can tell which app is open."
+    RequiredPermission.DEVICE_ADMIN -> "Nova needs device admin rights for that."
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colours come from the Compose theme; this only has to survive until setContent runs. -->
+    <style name="Theme.Nova" parent="android:Theme.Material.NoActionBar" />
+</resources>
