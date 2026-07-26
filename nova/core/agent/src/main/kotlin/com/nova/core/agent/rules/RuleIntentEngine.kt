@@ -224,9 +224,21 @@ class RuleIntentEngine : IntentEngine {
                 NovaAction.OpenNotifications,
             ),
 
+            // Before read-screen: "read the text on screen" is a request to recognise pixels,
+            // while "read the screen" is a request to list what can be tapped.
+            simpleRule(
+                "read-screen-text",
+                "\\bread (?:me |out )?(?:the |this )?text\\b|\\bwhat does (?:this|it) say\\b|" +
+                    "\\bread (?:this|the) (?:document|bill|receipt|label|page|image|photo)\\b|" +
+                    "\\bscan (?:this|the screen)\\b",
+                NovaAction.ReadScreenText,
+            ),
+
             simpleRule(
                 "read-screen",
-                "\\bwhat(?:s| is)? on (?:the |this )?screen\\b|\\bread (?:the |this )?screen\\b|\\bwhat (?:do you |can you )?see\\b|\\bwhat does (?:it|this) say\\b",
+                // "what does this say" belongs to the OCR rule above — it is a question about
+                // text, not about which controls are on screen.
+                "\\bwhat(?:s| is)? on (?:the |this )?screen\\b|\\bread (?:the |this )?screen\\b|\\bwhat (?:do you |can you )?see\\b",
                 NovaAction.ReadScreen,
             ),
 

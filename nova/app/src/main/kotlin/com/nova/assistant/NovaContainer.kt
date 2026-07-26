@@ -21,6 +21,8 @@ import com.nova.core.agent.memory.Memory
 import com.nova.core.agent.notifications.NotificationReader
 import com.nova.feature.notifications.ListenerNotificationReader
 import com.nova.feature.notifications.NotificationActionExecutor
+import com.nova.feature.vision.ScreenTextReader
+import com.nova.feature.vision.VisionActionExecutor
 import com.nova.core.agent.routine.RoutineStore
 import com.nova.feature.routines.RoutineActionExecutor
 import com.nova.feature.routines.RoutineScheduler
@@ -79,6 +81,9 @@ class NovaContainer(context: Context) {
     /** The shade, read live when asked. Nothing is kept. */
     val notifications: NotificationReader by lazy { ListenerNotificationReader(appContext) }
 
+    /** OCR for what the node tree cannot see. Offline, and nothing is written to disk. */
+    private val screenTextReader by lazy { ScreenTextReader() }
+
     val routineScheduler: RoutineScheduler by lazy {
         RoutineScheduler(appContext, RoutineReceiver::class.java)
     }
@@ -132,6 +137,7 @@ class NovaContainer(context: Context) {
                 MemoryActionExecutor(memory),
                 RoutineActionExecutor(routines, routineScheduler),
                 NotificationActionExecutor(notifications),
+                VisionActionExecutor(screenTextReader),
                 SpeakActionExecutor(),
             ),
             contextProvider = {

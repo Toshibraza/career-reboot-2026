@@ -128,6 +128,27 @@ Two decisions worth knowing:
 - **`toPrompt()` drops coordinates.** A planner should name the control it wants pressed, not a
   pixel — that keeps taps label-based, auditable, and resilient to layout changes.
 
+### Reading text off the screen
+
+```
+"what does this say"    "read the text"    "read this bill"    "scan this"
+```
+
+Two ways of seeing, for two different problems. `ReadScreen` lists the controls an app exposes
+through accessibility — exact, instant, and blind to anything without semantics. `ReadScreenText`
+captures the screen as pixels and runs ML Kit OCR over it, which is the only way to read a photo,
+a scanned document, a game, or a canvas-drawn view.
+
+- **Offline.** The bundled ML Kit model works on first run with no network. It costs about 42 MB
+  of APK — that is the whole reason to choose it over the Play-Services-delivered variant.
+- **Nothing is written to disk.** `AccessibilityService.takeScreenshot` hands back pixels rather
+  than saving a file, and the bitmap is recycled as soon as recognition finishes. A screenshot of
+  whatever the user had open is not something to leave lying around.
+- **Noise is dropped before speaking.** OCR routinely returns stray glyphs from icons and
+  borders; reading "|" and "-" between real lines makes the useful text harder to follow.
+- **Needs Android 11+**, which is where the screenshot API arrives, and says so on older
+  devices rather than failing silently.
+
 ### Memory
 
 "Remember my parking spot is B2" → "where is my parking spot". Stored in SQLite on the device,

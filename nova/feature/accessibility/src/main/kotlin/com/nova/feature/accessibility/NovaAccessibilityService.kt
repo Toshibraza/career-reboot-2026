@@ -1,14 +1,22 @@
 package com.nova.feature.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityService.ScreenshotResult
+import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.TextUtils
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.annotation.RequiresApi
+import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.Executors
+import kotlin.coroutines.resume
 import com.nova.core.agent.ScrollDirection
 import com.nova.core.agent.match.FuzzyMatcher
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,6 +79,38 @@ class NovaAccessibilityService : AccessibilityService() {
         } else {
             null
         }
+
+    /**
+     * Captures the screen as a bitmap, without saving anything.
+     *
+     * Different from [takeScreenshot], which asks the system to save a file to the gallery.
+     * This hands back pixels for reading — the caller decides what to do with them, and
+     * nothing is written to disk.
+     *
+     * Null below Android 11, which has no such API.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    suspend fun captureScreen(): Bitmap? = suspendCancellableCoroutine { continuation ->
+        takeScreenshot(
+            Display.DEFAULT_DISPLAY,
+            Executors.newSingleThreadExecutor(),
+            object : TakeScreenshotCallback {
+                override fun onSuccess(result: ScreenshotResult) {
+                    val bitmap = result.hardwareBuffer.use { buffer ->
+                        Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                            // Hardware bitmaps cannot be read pixel by pixel, and ML Kit needs
+                            // to. The copy is the price of reading the screen at all.
+                            ?.copy(Bitmap.Config.ARGB_8888, false)
+                    }
+                    if (continuation.isActive) continuation.resume(bitmap)
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    if (continuation.isActive) continuation.resume(null)
+                }
+            },
+        )
+    }
 
     // --- Screen interaction --------------------------------------------------------------
 

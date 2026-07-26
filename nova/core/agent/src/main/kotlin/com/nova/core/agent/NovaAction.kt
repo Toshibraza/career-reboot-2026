@@ -75,6 +75,14 @@ sealed interface NovaAction {
     /** Read out what is currently in the notification shade. */
     data object ReadNotifications : NovaAction
 
+    /**
+     * Read the screen's text as pixels rather than as a node tree.
+     *
+     * Distinct from [ReadScreen], which lists controls an app exposes. This is for what
+     * accessibility cannot see: a photo, a document, a game, a canvas-drawn view.
+     */
+    data object ReadScreenText : NovaAction
+
     data class SetFlashlight(val on: Boolean) : NovaAction
 
     data class SetVolume(val stream: VolumeStream, val level: LevelChange) : NovaAction
