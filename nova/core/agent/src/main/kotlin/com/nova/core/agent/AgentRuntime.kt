@@ -1,5 +1,6 @@
 package com.nova.core.agent
 
+import com.nova.core.agent.screen.ScreenSnapshot
 import com.nova.core.agent.task.PlannerDecision
 import com.nova.core.agent.task.StepRecord
 import com.nova.core.agent.task.TaskPlanner
@@ -58,9 +59,49 @@ class AgentRuntime(
         val executed = mutableListOf<NovaAction>()
         val results = mutableListOf<ActionResult>()
 
+        var previousScreen: ScreenSnapshot? = null
+        var lastAction: NovaAction? = null
+        var stalls = 0
+
         repeat(maxSteps) {
-            val decision = runCatching { planner.next(goal, context.screen(), history) }
+            val screen = runCatching { context.screen() }.getOrNull()
+
+            val decision = runCatching { planner.next(goal, screen, history) }
                 .getOrElse { return finish(goal, executed, results, "I couldn't work that out.") }
+
+            // A planner that repeats an action while the screen is unchanged has stopped
+            // making progress, whether or not it realises. Both on-device models failed
+            // exactly this way — choosing "open Settings" eight times with Settings already
+            // open. Detecting it here works regardless of which model is behind the planner.
+            // Two nulls count as unchanged on purpose. With no screen access there is no
+            // evidence of progress at all, which makes a repeat more suspicious rather than
+            // less — and without the guard the loop would burn every step at ~19 seconds each
+            // before admitting it got nowhere.
+            if (decision is PlannerDecision.Act &&
+                decision.action == lastAction &&
+                screen == previousScreen
+            ) {
+                stalls++
+                history += StepRecord(
+                    action = decision.action,
+                    outcome = "already done, and the screen did not change — try something else",
+                    succeeded = false,
+                )
+
+                if (stalls >= MAX_STALLS) {
+                    return finish(
+                        goal,
+                        executed,
+                        results,
+                        "I got stuck repeating the same step, so I stopped.",
+                    )
+                }
+                // Deliberately not executed: doing it again would change nothing and could
+                // press something twice that should only be pressed once.
+                return@repeat
+            }
+
+            previousScreen = screen
 
             when (decision) {
                 is PlannerDecision.Finished ->
@@ -73,6 +114,7 @@ class AgentRuntime(
                     val result = execute(decision.action)
                     executed += decision.action
                     results += result
+                    lastAction = decision.action
                     history += StepRecord(
                         action = decision.action,
                         outcome = result.describe(),
@@ -148,5 +190,13 @@ class AgentRuntime(
          * send — with headroom, and short enough that a confused planner stops quickly.
          */
         const val DEFAULT_MAX_STEPS = 8
+
+        /**
+         * Repeats tolerated before giving up.
+         *
+         * One is worth forgiving — a screen can take a moment to settle, and the planner may
+         * simply have looked too early. A second means it is not going to get there.
+         */
+        const val MAX_STALLS = 2
     }
 }

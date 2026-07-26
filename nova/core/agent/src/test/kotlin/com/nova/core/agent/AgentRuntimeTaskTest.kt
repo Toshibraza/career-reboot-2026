@@ -1,6 +1,8 @@
 package com.nova.core.agent
 
 import com.nova.core.agent.rules.RuleIntentEngine
+import com.nova.core.agent.screen.ElementRole
+import com.nova.core.agent.screen.ScreenElement
 import com.nova.core.agent.screen.ScreenSnapshot
 import com.nova.core.agent.task.PlannerDecision
 import com.nova.core.agent.task.StepRecord
@@ -110,16 +112,106 @@ class AgentRuntimeTaskTest {
     }
 
     @Test
-    fun `the step cap stops a planner that would loop forever`() = runTest {
-        // A planner that misreads a screen can otherwise tap indefinitely, and every step is
-        // a real touch on someone's phone.
-        val planner = ScriptedPlanner(List(100) { PlannerDecision.Act(NovaAction.ScrollScreen(ScrollDirection.DOWN)) })
+    fun `the step cap stops a planner that never finishes`() = runTest {
+        // Distinct actions each time, so this exercises the cap rather than the stall guard:
+        // a planner can wander productively-looking forever, and every step is a real touch on
+        // someone's phone.
+        val planner = ScriptedPlanner(
+            (1..100).map { PlannerDecision.Act(NovaAction.TapLabel("button $it")) },
+        )
         val executor = RecordingExecutor()
 
         val response = runtime(planner, executor, maxSteps = 3).handle("keep going forever")
 
         assertEquals(3, executor.executed.size)
         assertEquals("I got part of the way but couldn't finish that.", response.spoken)
+    }
+
+    @Test
+    fun `a blind planner repeating itself is stopped without burning every step`() = runTest {
+        // No screen access means no evidence of progress at all, which makes a repeat more
+        // suspicious rather than less. At ~19 seconds a step on-device, running the cap out
+        // would waste two minutes to reach the same answer.
+        val planner = ScriptedPlanner(List(100) { PlannerDecision.Act(NovaAction.OpenApp("Settings")) })
+        val executor = RecordingExecutor()
+
+        val response = runtime(planner, executor, maxSteps = 8).handle("do something")
+
+        assertEquals(1, executor.executed.size)
+        assertEquals("I got stuck repeating the same step, so I stopped.", response.spoken)
+    }
+
+    @Test
+    fun `a planner repeating itself against an unchanged screen is stopped`() = runTest {
+        // The exact failure both on-device models produced: choose "open Settings", see
+        // Settings already open, choose "open Settings" again, forever.
+        val screen = ScreenSnapshot("com.android.settings", "Settings", emptyList())
+        val planner = ScriptedPlanner(List(20) { PlannerDecision.Act(NovaAction.OpenApp("Settings")) })
+        val executor = RecordingExecutor()
+
+        val runtime = AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(executor),
+            contextProvider = { AgentContext(screenProvider = { screen }) },
+            taskPlanner = planner,
+        )
+
+        val response = runtime.handle("get me to the bluetooth settings")
+
+        // Executed once, then refused — repeating it would change nothing and could press
+        // something twice that should only be pressed once.
+        assertEquals(1, executor.executed.size)
+        assertEquals("I got stuck repeating the same step, so I stopped.", response.spoken)
+    }
+
+    @Test
+    fun `a stall is reported back to the planner as negative evidence`() = runTest {
+        val screen = ScreenSnapshot("com.android.settings", "Settings", emptyList())
+        val planner = ScriptedPlanner(
+            listOf(
+                PlannerDecision.Act(NovaAction.OpenApp("Settings")),
+                PlannerDecision.Act(NovaAction.OpenApp("Settings")),
+                PlannerDecision.Finished("Done."),
+            ),
+        )
+
+        AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(RecordingExecutor()),
+            contextProvider = { AgentContext(screenProvider = { screen }) },
+            taskPlanner = planner,
+        ).handle("do the thing")
+
+        val afterStall = planner.seenHistory.last().last()
+        assertTrue("already done" in afterStall.outcome)
+        assertTrue(!afterStall.succeeded)
+    }
+
+    @Test
+    fun `repeating an action is allowed when the screen actually changed`() = runTest {
+        // Scrolling twice down a long page is legitimate progress, not a stall — the guard
+        // keys on the screen being identical, not on the action being the same.
+        var reads = 0
+        val planner = ScriptedPlanner(
+            List(3) { PlannerDecision.Act(NovaAction.ScrollScreen(ScrollDirection.DOWN)) },
+        )
+        val executor = RecordingExecutor()
+
+        AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(executor),
+            contextProvider = {
+                AgentContext(
+                    screenProvider = {
+                        ScreenSnapshot("app", "App", listOf(ScreenElement("row ${reads++}", ElementRole.TEXT, false)))
+                    },
+                )
+            },
+            taskPlanner = planner,
+            maxSteps = 3,
+        ).handle("scroll to the bottom")
+
+        assertEquals(3, executor.executed.size)
     }
 
     @Test

@@ -70,6 +70,8 @@ object TaskPrompt {
         Rules:
         - Only tap labels that appear in the screen listing. Never invent one.
         - Tap a text field before typing into it.
+        - Never repeat a step that already succeeded. If the app you needed is already open,
+          the next step is what to do inside it, not opening it again.
         - When the goal is achieved, reply with decision "finish" and a short spoken message.
         - If you cannot achieve it — the contact is not there, the app is missing, the screen
           is unreadable — reply with decision "blocked" and say plainly why. Do not guess, and
@@ -119,6 +121,17 @@ object TaskPrompt {
             history.forEachIndexed { index, step ->
                 val status = if (step.succeeded) "ok" else "FAILED"
                 appendLine("${index + 1}. ${step.action.describe()} -> $status: ${step.outcome}")
+            }
+
+            // Spelled out rather than left to be inferred from the list above. Both on-device
+            // models read a history saying "open Settings -> ok" and then chose to open
+            // Settings again; naming the completed steps as forbidden is a much stronger
+            // signal to a small model than expecting it to reason about consequences.
+            val done = history.filter { it.succeeded }.map { it.action.describe() }.distinct()
+            if (done.isNotEmpty()) {
+                appendLine()
+                appendLine("ALREADY DONE — do not repeat these, move on to the next step:")
+                done.forEach { appendLine("- $it") }
             }
         }
     }.trim()
