@@ -1,5 +1,6 @@
 package com.nova.assistant.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -123,6 +124,11 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(status = NovaStatus.THINKING, message = null, pendingPermission = null) }
 
+            // Logged for the same reason the debug receiver logs: without it there is no way
+            // to tell "the command never ran" from "it ran and did nothing visible", and that
+            // ambiguity cost real time diagnosing the wake word.
+            Log.i(TAG, "\"$utterance\"")
+
             if (echo) container.speaker.speak("You said, $utterance")
 
             val response = container.runtime.handle(utterance)
@@ -140,6 +146,8 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
                     pendingPermission = blocked?.permission,
                 )
             }
+
+            Log.i(TAG, "-> ${response.plan.actions} -> ${response.spoken}")
 
             container.speaker.speak(response.spoken)
             _state.update { it.copy(status = NovaStatus.IDLE) }
@@ -189,6 +197,8 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
     }
 
     companion object {
+        private const val TAG = "NovaCommand"
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
