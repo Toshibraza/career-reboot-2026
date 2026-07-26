@@ -59,6 +59,13 @@ class RoutineReceiver : BroadcastReceiver() {
 
                 // A one-off is done. Removing it also stops it reappearing after a reboot.
                 is RoutineTrigger.OnceAt -> container.routines.remove(routine.id)
+
+                // Power and battery routines never reach here — they are driven by
+                // PowerReceiver, and nothing about them needs re-arming on a clock.
+                is RoutineTrigger.BatteryBelow,
+                RoutineTrigger.PowerConnected,
+                RoutineTrigger.PowerDisconnected,
+                -> Unit
             }
         }
     }

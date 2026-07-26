@@ -249,6 +249,47 @@ class RuleIntentEngineTest {
     }
 
     @Test
+    fun `schedules on a battery threshold`() {
+        assertEquals(
+            NovaAction.CreateRoutine(
+                trigger = RoutineTrigger.BatteryBelow(20),
+                command = "turn on battery saver",
+                spokenSchedule = "when the battery drops below 20 percent",
+            ),
+            parse("when battery is below 20 percent, turn on battery saver"),
+        )
+        assertEquals(
+            RoutineTrigger.BatteryBelow(15),
+            (parse("if the battery drops under 15%, open settings") as NovaAction.CreateRoutine).trigger,
+        )
+    }
+
+    @Test
+    fun `an impossible battery threshold declines`() = runTest {
+        // 0 and 100 are not thresholds anyone means, and a routine that can never fire — or
+        // fires forever — is worse than one that was not created.
+        listOf(
+            "when battery is below 0 percent, open settings",
+            "when battery is below 100 percent, open settings",
+        ).forEach {
+            val plan = engine.plan(it, AgentContext())
+            assertTrue("expected '$it' to decline", plan.actions.single() is NovaAction.Unsupported)
+        }
+    }
+
+    @Test
+    fun `schedules on plugging in and unplugging`() {
+        assertEquals(
+            RoutineTrigger.PowerConnected,
+            (parse("when i plug in the charger, read my notifications") as NovaAction.CreateRoutine).trigger,
+        )
+        assertEquals(
+            RoutineTrigger.PowerDisconnected,
+            (parse("when i unplug the charger, turn on battery saver") as NovaAction.CreateRoutine).trigger,
+        )
+    }
+
+    @Test
     fun `lists and deletes routines`() {
         assertEquals(NovaAction.ListRoutines, parse("list my routines"))
         assertEquals(NovaAction.DeleteRoutine("buy milk"), parse("cancel the reminder to buy milk"))

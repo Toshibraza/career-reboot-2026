@@ -69,15 +69,31 @@ class RoutineActionExecutor(
         val schedule = when (val trigger = trigger) {
             is RoutineTrigger.Daily -> "every day at ${trigger.at.spoken()}"
             is RoutineTrigger.OnceAt -> "at ${trigger.at.spoken()}"
+            is RoutineTrigger.BatteryBelow -> "when the battery drops below ${trigger.percent} percent"
+            RoutineTrigger.PowerConnected -> "when you plug in"
+            RoutineTrigger.PowerDisconnected -> "when you unplug the charger"
         }
         return "${spokenCommand()} $schedule"
     }
 
-    /** "say buy milk" reads better as "remind you to buy milk". */
-    private fun Routine.spokenCommand(): String =
-        command.removePrefix("say ").let { rest ->
-            if (rest == command) rest else "remind you to $rest"
+    /**
+     * How to describe the command out loud.
+     *
+     * "Say buy milk at 6 pm" reads better as "remind you to buy milk" — but only when it came
+     * from "remind me to", which is exactly the one-off trigger. A user who wrote "say battery
+     * is getting low" gets "I'll remind you to battery is getting low" otherwise, which is not
+     * English.
+     */
+    private fun Routine.spokenCommand(): String {
+        val spoken = command.removePrefix("say ")
+        val isDictated = spoken != command
+
+        return when {
+            isDictated && trigger is RoutineTrigger.OnceAt -> "remind you to $spoken"
+            isDictated -> "say $spoken"
+            else -> command
         }
+    }
 
     private companion object {
         const val SPOKEN_LIMIT = 5

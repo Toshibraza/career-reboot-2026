@@ -30,10 +30,20 @@ class RoutineScheduler(
     private val appContext = context.applicationContext
     private val alarms = appContext.getSystemService(AlarmManager::class.java)
 
+    /**
+     * Arms a routine, if it is the kind that needs an alarm.
+     *
+     * Battery and charger routines are driven by system broadcasts instead — there is no
+     * moment in the future to wake up for, only a state change to notice.
+     */
     fun schedule(routine: Routine) {
         val at = when (val trigger = routine.trigger) {
             is RoutineTrigger.Daily -> trigger.at
             is RoutineTrigger.OnceAt -> trigger.at
+            is RoutineTrigger.BatteryBelow,
+            RoutineTrigger.PowerConnected,
+            RoutineTrigger.PowerDisconnected,
+            -> return
         }
 
         alarms.setAndAllowWhileIdle(

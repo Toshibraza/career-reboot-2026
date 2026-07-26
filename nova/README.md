@@ -204,6 +204,29 @@ Decisions:
 - **Alarms do not survive a reboot**, so `RoutineReceiver` re-arms everything on
   `BOOT_COMPLETED` and after the app is updated.
 
+Battery and charger triggers work too:
+
+```
+"when battery is below 20 percent, turn on battery saver"
+"when i plug in the charger, read my notifications"
+```
+
+- **Power broadcasts must be registered at runtime, not in the manifest.** Since Android 8 the
+  system refuses to deliver them to manifest-declared receivers in background apps — confirmed
+  on device, where logcat showed `Background execution not allowed: receiving Intent
+  ACTION_POWER_DISCONNECTED` for every app that tried. Registering from the `Application` object
+  works. The trade: power routines need Nova's process alive, which it normally is because the
+  accessibility service keeps it bound. A foreground service running all day purely to watch the
+  charger would cost more battery than these routines save.
+- **A battery routine fires once per discharge, not once per percent.** A 20% rule that fired
+  again at 19, 18 and 17 would be indistinguishable from a bug, so each is latched when it fires
+  and re-armed when a charger is connected. Verified on device: 1 fire on crossing, 0 as the
+  level kept dropping.
+- **Arbitrary thresholds are checked opportunistically.** `ACTION_BATTERY_CHANGED` cannot be
+  registered in a manifest and continuous polling is not worth the battery, so thresholds are
+  evaluated when the charger is unplugged, when the system reports the battery low, and while
+  Nova is running. A routine set at 40% may fire late.
+
 ### Multi-step tasks
 
 Anything the rule engine can't parse escalates to a `TaskPlanner`, which drives an **observe-act

@@ -67,7 +67,14 @@ class NovaContainer(context: Context) {
     /** Everything Nova has been told to remember. Local, and never leaves the device. */
     val memory: Memory by lazy { SqliteMemory(appContext) }
 
-    val routines: RoutineStore by lazy { SqliteRoutineStore(appContext) }
+    /**
+     * Concrete rather than the interface, because power triggers need the arming operations.
+     * Those are storage bookkeeping for one trigger kind, not something every implementation
+     * of [RoutineStore] should have to answer for.
+     */
+    val routineStore: SqliteRoutineStore by lazy { SqliteRoutineStore(appContext) }
+
+    val routines: RoutineStore get() = routineStore
 
     /** The shade, read live when asked. Nothing is kept. */
     val notifications: NotificationReader by lazy { ListenerNotificationReader(appContext) }

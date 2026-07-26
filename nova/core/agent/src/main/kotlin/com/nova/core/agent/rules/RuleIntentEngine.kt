@@ -93,6 +93,45 @@ class RuleIntentEngine : IntentEngine {
                 REMINDER_AT_TO.find(it.raw.trim())?.reminder(what = 2, time = 1)
             },
 
+            rule("routine-battery", "^(?:when|if)\\b.*\\bbattery\\b") {
+                val match = BATTERY_ROUTINE.find(it.raw.trim()) ?: return@rule null
+                val percent = match.groupValues[1].toIntOrNull()?.takeIf { p -> p in 1..99 }
+                    ?: return@rule null
+                val command = match.groupValues[2].trim().ifEmpty { return@rule null }
+
+                listOf(
+                    NovaAction.CreateRoutine(
+                        trigger = RoutineTrigger.BatteryBelow(percent),
+                        command = command,
+                        spokenSchedule = "when the battery drops below $percent percent",
+                    ),
+                )
+            },
+
+            rule("routine-power", "^(?:when|if)\\b.*\\b(?:charger|charging|plug|unplug|power)\\b") {
+                val match = POWER_ROUTINE.find(it.raw.trim()) ?: return@rule null
+                val command = match.groupValues[2].trim().ifEmpty { return@rule null }
+
+                val disconnected = Regex("un ?plug|disconnect|remove", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(match.groupValues[1])
+
+                listOf(
+                    NovaAction.CreateRoutine(
+                        trigger = if (disconnected) {
+                            RoutineTrigger.PowerDisconnected
+                        } else {
+                            RoutineTrigger.PowerConnected
+                        },
+                        command = command,
+                        spokenSchedule = if (disconnected) {
+                            "when you unplug the charger"
+                        } else {
+                            "when you plug in"
+                        },
+                    ),
+                )
+            },
+
             rule("say", "^say (.+)$") {
                 val words = it.rawAfter("say") ?: it.group(1)
                 words.takeIf(String::isNotBlank)?.let { text -> listOf(NovaAction.Speak(text)) }
@@ -277,8 +316,17 @@ class RuleIntentEngine : IntentEngine {
                 "recall",
                 "^(?:what|where|when|who|which)(?:s| is| was| are| were)? (?:my |the |our )?(.+)$",
             ) {
-                it.group(1).takeIf(String::isNotBlank)
-                    ?.let { subject -> listOf(NovaAction.Recall(subject)) }
+                val subject = it.group(1).trim()
+
+                // A stored subject is a short noun phrase — "parking spot", "the gate code".
+                // Without this cap the pattern swallows any sentence beginning with a question
+                // word, including a scheduling command that declined earlier: "when battery is
+                // below 0 percent, open settings" became a lookup for a seven-word subject
+                // instead of being reported as not understood.
+                if (subject.isBlank() || subject.split(' ').size > MAX_SUBJECT_WORDS) {
+                    return@rule null
+                }
+                listOf(NovaAction.Recall(subject))
             },
         )
 
@@ -302,6 +350,9 @@ class RuleIntentEngine : IntentEngine {
 
         val SUBJECT_SEPARATORS = listOf(" is ", " are ", " was ", " were ", ": ")
 
+        /** Longer than this and it is a sentence, not something Nova was told to remember. */
+        const val MAX_SUBJECT_WORDS = 5
+
         /** A clock time as spoken: "6", "6:30", "6 pm", "18:00". */
         const val TIME = "\\d{1,2}(?::\\d{2})?(?:\\s*[ap]m)?"
 
@@ -313,6 +364,20 @@ class RuleIntentEngine : IntentEngine {
 
         val REMINDER_AT_TO =
             Regex("^remind me at\\s+($TIME)\\s+to\\s+(.+)$", RegexOption.IGNORE_CASE)
+
+        val BATTERY_ROUTINE = Regex(
+            "^(?:when|if)\\s+(?:the\\s+)?battery\\s+(?:is\\s+|gets\\s+|drops\\s+|falls\\s+)?" +
+                // Three digits, not two: "below 100 percent" would otherwise capture "10" and
+                // silently create a routine at ten percent with "0 percent" left in the
+                // command, instead of being rejected as the nonsense it is.
+                "(?:below|under|less than)\\s+(\\d{1,3})\\s*(?:%|percent)?\\s*,?\\s*(.+)$",
+            RegexOption.IGNORE_CASE,
+        )
+
+        val POWER_ROUTINE = Regex(
+            "^(?:when|if)\\s+(?:i\\s+)?(.*?(?:charger|charging|plug\\w*|power).*?)\\s*,\\s*(.+)$",
+            RegexOption.IGNORE_CASE,
+        )
 
         /**
          * Builds a one-off reminder from a match.

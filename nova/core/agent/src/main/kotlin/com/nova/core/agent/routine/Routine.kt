@@ -93,6 +93,21 @@ sealed interface RoutineTrigger {
      * with the scheduler, not the parser.
      */
     data class OnceAt(val at: TimeOfDay) : RoutineTrigger
+
+    /**
+     * When the battery falls below [percent].
+     *
+     * Fires once per discharge rather than on every percent below the line — see the `armed`
+     * flag on the store. A routine that turned on battery saver at 20% and then again at 19%,
+     * 18%, 17% would be indistinguishable from a bug.
+     */
+    data class BatteryBelow(val percent: Int) : RoutineTrigger
+
+    /** When a charger is plugged in. */
+    data object PowerConnected : RoutineTrigger
+
+    /** When a charger is unplugged. */
+    data object PowerDisconnected : RoutineTrigger
 }
 
 /**

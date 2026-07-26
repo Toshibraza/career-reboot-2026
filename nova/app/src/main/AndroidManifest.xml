@@ -48,6 +48,16 @@
             android:foregroundServiceType="microphone" />
 
         <receiver
+            android:name=".PowerReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+                <action android:name="android.intent.action.BATTERY_LOW" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".RoutineReceiver"
             android:exported="false">
             <intent-filter>
