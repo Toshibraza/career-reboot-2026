@@ -170,6 +170,15 @@ class RuleIntentEngine : IntentEngine {
                 "\\brecent apps?\\b|\\bapp switcher\\b|^recents$",
                 NovaAction.OpenRecents,
             ),
+            // Reading comes before opening: "read my notifications" and "show my
+            // notifications" are different requests, and the shade rule would swallow both.
+            simpleRule(
+                "read-notifications",
+                "\\bread (?:me |out )?(?:my |the )?notifications\\b|\\bwhat did i miss\\b|" +
+                    "\\bany (?:new )?(?:messages|notifications)\\b|\\bcheck (?:my )?notifications\\b",
+                NovaAction.ReadNotifications,
+            ),
+
             simpleRule(
                 "notifications",
                 "\\bnotification (?:shade|panel)\\b|\\b(?:show|open|pull down) (?:my )?notifications\\b",

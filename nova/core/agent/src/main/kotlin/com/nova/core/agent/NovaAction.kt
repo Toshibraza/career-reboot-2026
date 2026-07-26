@@ -72,6 +72,9 @@ sealed interface NovaAction {
 
     data class DeleteRoutine(val query: String) : NovaAction
 
+    /** Read out what is currently in the notification shade. */
+    data object ReadNotifications : NovaAction
+
     data class SetFlashlight(val on: Boolean) : NovaAction
 
     data class SetVolume(val stream: VolumeStream, val level: LevelChange) : NovaAction

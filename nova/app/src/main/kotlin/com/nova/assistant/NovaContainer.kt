@@ -18,6 +18,9 @@ import com.nova.core.speech.SpeechToText
 import com.nova.core.speech.GatedWakeWordDetector
 import com.nova.core.speech.WakeWordDetector
 import com.nova.core.agent.memory.Memory
+import com.nova.core.agent.notifications.NotificationReader
+import com.nova.feature.notifications.ListenerNotificationReader
+import com.nova.feature.notifications.NotificationActionExecutor
 import com.nova.core.agent.routine.RoutineStore
 import com.nova.feature.routines.RoutineActionExecutor
 import com.nova.feature.routines.RoutineScheduler
@@ -65,6 +68,9 @@ class NovaContainer(context: Context) {
     val memory: Memory by lazy { SqliteMemory(appContext) }
 
     val routines: RoutineStore by lazy { SqliteRoutineStore(appContext) }
+
+    /** The shade, read live when asked. Nothing is kept. */
+    val notifications: NotificationReader by lazy { ListenerNotificationReader(appContext) }
 
     val routineScheduler: RoutineScheduler by lazy {
         RoutineScheduler(appContext, RoutineReceiver::class.java)
@@ -118,6 +124,7 @@ class NovaContainer(context: Context) {
                 AccessibilityActionExecutor(screenReader),
                 MemoryActionExecutor(memory),
                 RoutineActionExecutor(routines, routineScheduler),
+                NotificationActionExecutor(notifications),
                 SpeakActionExecutor(),
             ),
             contextProvider = {

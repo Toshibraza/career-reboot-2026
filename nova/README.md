@@ -152,6 +152,25 @@ Three decisions:
 *when*, not *what* — so it declines rather than filing it as a fact and losing the part that
 matters.
 
+### Notifications
+
+"Read my notifications", "what did I miss". Needs notification access, granted under Settings →
+Notifications → Special app access.
+
+**Nothing is stored.** `onNotificationPosted` is deliberately not used to build a history — these
+are other people's messages as much as the user's, and a transcript of them on disk would be a
+liability with no matching benefit. The shade is read live at the moment the user asks.
+
+- **Three states, not a boolean.** "Not granted", "granted but not bound yet" and "nothing new"
+  get different answers. Collapsing the first two tells someone to grant access they already
+  gave; collapsing "not granted" with "nothing new" makes a missing permission look like an
+  empty inbox, which is the one wrong answer that really matters here.
+- **Bodies are clipped at a word boundary.** A marketing email arrives as three hundred
+  characters of prose. Read out in full it buries the message that mattered — a real Outlook
+  notification on device was the test case.
+- **Ongoing notifications are skipped.** The music player, the navigation bar, Nova's own
+  listening notice — those are status, not news.
+
 ### Routines and reminders
 
 ```
