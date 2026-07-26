@@ -60,7 +60,13 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
         if (_state.value.status == NovaStatus.LISTENING) stopListening() else startListening()
     }
 
-    private fun startListening() {
+    /**
+     * Public so the assist gesture can open the mic directly.
+     *
+     * Being invoked by a power-button hold means the user has already committed to speaking —
+     * making them tap a second button would be pure friction.
+     */
+    fun startListening() {
         if (listenJob?.isActive == true) return
 
         listenJob = viewModelScope.launch {

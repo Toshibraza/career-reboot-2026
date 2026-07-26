@@ -60,6 +60,7 @@ fun NovaScreen(
     onOpenSettingsFor: (RequiredPermission) -> Unit,
     onDismissPermissionPrompt: () -> Unit,
     onAlwaysListeningChange: (Boolean) -> Unit,
+    onOpenAssistantSettings: () -> Unit,
     onSaveApiKey: (String) -> Unit,
     onClearApiKey: () -> Unit,
     modifier: Modifier = Modifier,
@@ -102,6 +103,10 @@ fun NovaScreen(
                 )
                 Spacer(Modifier.height(8.dp))
             }
+
+            AssistGestureRow(onOpenAssistantSettings)
+
+            Spacer(Modifier.height(8.dp))
 
             AlwaysListeningRow(alwaysListening, micGranted, onAlwaysListeningChange)
 
@@ -165,6 +170,29 @@ private fun Header(status: NovaStatus) {
     }
 }
 
+/**
+ * The hands-free route that costs nothing.
+ *
+ * Offered above the always-listening switch on purpose: most people reaching for "wake on my
+ * voice" actually want "reach Nova without touching the screen", and the gesture does that with
+ * no microphone held open at all.
+ */
+@Composable
+private fun AssistGestureRow(onOpenAssistantSettings: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Assistant gesture", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "Set Nova as your assistant app — hold power or swipe a corner to talk. " +
+                    "No battery cost.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onOpenAssistantSettings) { Text("Set up") }
+    }
+}
+
 @Composable
 private fun AlwaysListeningRow(
     enabled: Boolean,
@@ -175,8 +203,10 @@ private fun AlwaysListeningRow(
         Column(Modifier.weight(1f)) {
             Text("Always listening", style = MaterialTheme.typography.bodyLarge)
             Text(
-                // Said plainly, because the current detector really does cost battery.
-                text = "Wake on \"Nova\". Holds the mic open — heavy on battery for now.",
+                // Still honest: the gate cuts the idle cost, but a room with talking in it
+                // still wakes the recogniser repeatedly.
+                text = "Wake on \"Nova\". Only listens properly once it hears a voice, " +
+                    "but still costs battery in a noisy room.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

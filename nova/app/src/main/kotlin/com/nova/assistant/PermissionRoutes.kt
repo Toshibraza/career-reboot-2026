@@ -13,6 +13,27 @@ import com.nova.core.agent.RequiredPermission
  * has to visit. Sending them straight to the right page is the difference between a feature
  * people turn on and one they give up on.
  */
+/**
+ * Opens the screen where the device's assistant app is chosen.
+ *
+ * The exact activity varies by OEM, so this tries the specific picker first and falls back to
+ * the app's own details page rather than dead-ending on a device that lacks it.
+ */
+fun Context.openAssistantSettings() {
+    val candidates = listOf(
+        Intent("android.settings.VOICE_INPUT_SETTINGS"),
+        Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)),
+    )
+
+    for (intent in candidates) {
+        val started = runCatching {
+            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.isSuccess
+        if (started) return
+    }
+}
+
 fun Context.openSettingsFor(permission: RequiredPermission) {
     val packageUri = Uri.fromParts("package", packageName, null)
 

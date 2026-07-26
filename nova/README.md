@@ -192,10 +192,19 @@ rather than precedence.
 
 These are real, and none of them are hidden behind a silent failure:
 
-- **Wake word costs battery.** `TranscriptWakeWordDetector` re-runs the platform recogniser in a
-  loop and holds the mic open. It works with no model file, which is what Phase 1 needed, but the
-  platform recogniser is not built to run all day. Phase 2 replaces it with a proper keyword
-  spotter (Porcupine or openWakeWord) on a small audio ring buffer — same interface, new class.
+- **Hands-free has two routes, and the cheap one is better.** Setting Nova as the device
+  assistant means a power-button hold or corner swipe opens the mic, with **nothing running in
+  the background at all**. Most people asking for "wake on my voice" actually want "reach Nova
+  without touching the screen", and the gesture does that for free.
+- **The wake word still costs battery, less than it did.** `GatedWakeWordDetector` watches raw
+  microphone energy — arithmetic over a small buffer — and only starts the speech recogniser
+  once it hears a voice, so in a quiet room the recogniser never runs. In a room with a
+  conversation in it, it runs repeatedly, because it is still full transcription deciding
+  whether the phrase was said. The correct fix is a purpose-trained keyword spotter (Porcupine,
+  or openWakeWord) running a 1–2 MB model over a rolling buffer, answering "was that the
+  phrase" without transcribing. That is a new implementation of `WakeWordDetector`; nothing
+  that collects `detections()` changes. `TranscriptWakeWordDetector` remains as a fallback for
+  devices where the raw-audio gate cannot open the microphone.
 - **Background activity starts.** Android 10+ blocks starting activities from the background, so
   "open YouTube" spoken to the always-listening service with the app off-screen may do nothing.
 - **Nothing can close another app.** Force-stop is reserved for the system, a device owner, or
@@ -219,6 +228,10 @@ These are real, and none of them are hidden behind a silent failure:
 - **MIUI specifics.** `pm grant` and `input` over adb both need "USB debugging (Security
   settings)" enabled, which requires a signed-in Xiaomi account. MIUI also has its own autostart
   and background-activity restrictions that will affect the always-listening service.
+- **Reinstalling disables the accessibility service.** Android drops accessibility privileges
+  when an app is updated, so after every `adb install -r` the switch under Settings →
+  Accessibility must be turned back on. Observed directly: `enabled_accessibility_services` goes
+  to `null`. Nothing in the app can re-grant it, and nothing should be able to.
 
 ## Roadmap
 

@@ -11,6 +11,9 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.nova.core.agent.ScrollDirection
 import com.nova.core.agent.match.FuzzyMatcher
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Nova's hands.
@@ -27,12 +30,12 @@ class NovaAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        connected = this
+        binding.value = this
     }
 
     override fun onDestroy() {
         // Guard against a newer instance having already claimed the slot.
-        if (connected === this) connected = null
+        if (binding.value === this) binding.value = null
         super.onDestroy()
     }
 
@@ -148,15 +151,21 @@ class NovaAccessibilityService : AccessibilityService() {
 
     companion object {
         /**
-         * The live service, or null when the user has not enabled it.
+         * The live service, or null when it is not bound.
          *
          * A static reference to a Service is normally a leak; here the system controls the
          * lifetime and clears it in [onDestroy], and it is the only channel the platform
          * offers for reaching a bound AccessibilityService.
+         *
+         * Held as a flow rather than a plain field so the UI can react to binding. Android
+         * rebinds the service a moment after a force-stop, and a screen that only re-read this
+         * on resume would sit there telling the user to enable something already enabled.
          */
-        @Volatile
-        var connected: NovaAccessibilityService? = null
-            private set
+        private val binding = MutableStateFlow<NovaAccessibilityService?>(null)
+
+        val connection: StateFlow<NovaAccessibilityService?> = binding.asStateFlow()
+
+        val connected: NovaAccessibilityService? get() = binding.value
 
         /**
          * Whether the user has switched Nova on in Settings.

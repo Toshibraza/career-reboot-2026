@@ -35,9 +35,18 @@ class MainActivity : ComponentActivity() {
      */
     private val injectedCommand = mutableStateOf<String?>(null)
 
+    /**
+     * Set when Nova was opened by the assist gesture rather than its launcher icon.
+     *
+     * This is the hands-free entry point that costs nothing: a power-button hold or corner
+     * swipe, with no microphone held open in the background.
+     */
+    private val assistRequested = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         injectedCommand.value = readCommandExtra(intent)
+        assistRequested.value = intent?.action == Intent.ACTION_ASSIST
 
         setContent {
             NovaTheme {
@@ -46,9 +55,16 @@ class MainActivity : ComponentActivity() {
                 val state by viewModel.state.collectAsState()
 
                 var micGranted by remember { mutableStateOf(hasMicPermission()) }
-                var accessibilityEnabled by remember {
+
+                // Two sources, because neither alone is right. The settings entry covers the
+                // moment after a rebind when the service is enabled but not yet bound; the
+                // live binding covers the reverse, and drives recomposition so the prompt
+                // disappears the instant Nova can actually act.
+                var accessibilityInSettings by remember {
                     mutableStateOf(NovaAccessibilityService.isEnabled(this@MainActivity))
                 }
+                val boundService by NovaAccessibilityService.connection.collectAsState()
+                val accessibilityEnabled = accessibilityInSettings || boundService != null
                 var alwaysListening by remember { mutableStateOf(NovaListeningService.isRunning) }
 
                 val apiKeys = (application as NovaApplication).container.apiKeys
@@ -68,7 +84,7 @@ class MainActivity : ComponentActivity() {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
                             micGranted = hasMicPermission()
-                            accessibilityEnabled =
+                            accessibilityInSettings =
                                 NovaAccessibilityService.isEnabled(this@MainActivity)
                             alwaysListening = NovaListeningService.isRunning
                         }
@@ -81,6 +97,15 @@ class MainActivity : ComponentActivity() {
                     injectedCommand.value?.let { command ->
                         injectedCommand.value = null
                         viewModel.submit(command)
+                    }
+                }
+
+                // Invoked by the gesture, the user is already mid-thought. Open the mic
+                // straight away rather than making them find a button.
+                LaunchedEffect(assistRequested.value, micGranted) {
+                    if (assistRequested.value && micGranted) {
+                        assistRequested.value = false
+                        viewModel.startListening()
                     }
                 }
 
@@ -104,6 +129,7 @@ class MainActivity : ComponentActivity() {
                             NovaListeningService.stop(context)
                         }
                     },
+                    onOpenAssistantSettings = context::openAssistantSettings,
                     onSaveApiKey = {
                         apiKeys.save(it)
                         apiKeyRevision++
@@ -121,6 +147,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         injectedCommand.value = readCommandExtra(intent)
+        assistRequested.value = intent.action == Intent.ACTION_ASSIST
     }
 
     /**

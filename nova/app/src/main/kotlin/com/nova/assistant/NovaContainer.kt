@@ -12,7 +12,7 @@ import com.nova.core.speech.AndroidSpeaker
 import com.nova.core.speech.AndroidSpeechToText
 import com.nova.core.speech.Speaker
 import com.nova.core.speech.SpeechToText
-import com.nova.core.speech.TranscriptWakeWordDetector
+import com.nova.core.speech.GatedWakeWordDetector
 import com.nova.core.speech.WakeWordDetector
 import com.nova.core.agent.screen.ScreenReader
 import com.nova.feature.accessibility.AccessibilityActionExecutor
@@ -37,7 +37,12 @@ class NovaContainer(context: Context) {
 
     val speaker: Speaker by lazy { AndroidSpeaker(appContext) }
 
-    val wakeWordDetector: WakeWordDetector by lazy { TranscriptWakeWordDetector(speechToText) }
+    /**
+     * Gated rather than polling: the recogniser only starts once raw microphone energy
+     * suggests someone is actually speaking. See [GatedWakeWordDetector] for what this still
+     * does not solve.
+     */
+    val wakeWordDetector: WakeWordDetector by lazy { GatedWakeWordDetector(speechToText) }
 
     private val appRegistry by lazy { AppRegistry(appContext) }
 
