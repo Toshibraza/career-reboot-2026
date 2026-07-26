@@ -7,6 +7,8 @@ import com.nova.core.agent.NovaAction
 import com.nova.core.agent.Plan
 import com.nova.core.agent.ScrollDirection
 import com.nova.core.agent.VolumeStream
+import com.nova.core.agent.routine.RoutineTrigger
+import com.nova.core.agent.routine.TimeOfDay
 
 /**
  * Deterministic, offline intent parsing for the commands people actually use every day.
@@ -61,8 +63,54 @@ class RuleIntentEngine : IntentEngine {
 
         val RULES: List<CommandRule> = listOf(
 
+            // --- Scheduling --------------------------------------------------------------
+            // Registered before everything else because these *wrap* another command. The
+            // flashlight rule matches "flashlight" anywhere, so "every day at 10 pm turn on
+            // the flashlight" would otherwise switch the torch on immediately instead of
+            // scheduling it. All three are anchored to their own opening words, so putting
+            // them first shadows nothing.
+            rule("routine-daily", "^every\\s+(?:day|morning|afternoon|evening|night)\\b") {
+                val match = DAILY_ROUTINE.find(it.raw.trim()) ?: return@rule null
+                val time = TimeOfDay.parse("at ${match.groupValues[1]}") ?: return@rule null
+                val command = match.groupValues[2].trim().ifEmpty { return@rule null }
+
+                listOf(
+                    NovaAction.CreateRoutine(
+                        trigger = RoutineTrigger.Daily(time),
+                        command = command,
+                        spokenSchedule = "every day at ${time.spoken()}",
+                    ),
+                )
+            },
+
+            // Two phrasings, two rules. Deriving which is which from one match was unreadable
+            // and got it wrong.
+            rule("reminder-to-at", "^remind me to\\b") {
+                REMINDER_TO_AT.find(it.raw.trim())?.reminder(what = 1, time = 2)
+            },
+
+            rule("reminder-at-to", "^remind me at\\b") {
+                REMINDER_AT_TO.find(it.raw.trim())?.reminder(what = 2, time = 1)
+            },
+
+            rule("say", "^say (.+)$") {
+                val words = it.rawAfter("say") ?: it.group(1)
+                words.takeIf(String::isNotBlank)?.let { text -> listOf(NovaAction.Speak(text)) }
+            },
+
+            simpleRule(
+                "list-routines",
+                "^(?:list|show|what are) (?:my )?routines$|^what have you scheduled$",
+                NovaAction.ListRoutines,
+            ),
+
+            rule("delete-routine", "^(?:delete|remove|cancel|stop) (?:the )?(?:routine|reminder|alarm)(?: for| to| about)? ?(.*)$") {
+                listOf(NovaAction.DeleteRoutine(it.group(1).trim()))
+            },
+
             // --- Torch -------------------------------------------------------------------
-            // Registered first: "close the torch" must not reach the close-app rule.
+            // Registered first among the direct commands: "close the torch" must not reach
+            // the close-app rule.
             rule("flashlight", "\\b(?:flash ?light|torch)\\b") {
                 listOf(NovaAction.SetFlashlight(on = !it.contains(OFF)))
             },
@@ -244,6 +292,37 @@ class RuleIntentEngine : IntentEngine {
         }
 
         val SUBJECT_SEPARATORS = listOf(" is ", " are ", " was ", " were ", ": ")
+
+        /** A clock time as spoken: "6", "6:30", "6 pm", "18:00". */
+        const val TIME = "\\d{1,2}(?::\\d{2})?(?:\\s*[ap]m)?"
+
+        val DAILY_ROUTINE =
+            Regex("^every\\s+(?:day|morning|afternoon|evening|night)\\s+at\\s+($TIME)\\s*,?\\s*(.+)$", RegexOption.IGNORE_CASE)
+
+        val REMINDER_TO_AT =
+            Regex("^remind me to\\s+(.+?)\\s+at\\s+($TIME)\\s*$", RegexOption.IGNORE_CASE)
+
+        val REMINDER_AT_TO =
+            Regex("^remind me at\\s+($TIME)\\s+to\\s+(.+)$", RegexOption.IGNORE_CASE)
+
+        /**
+         * Builds a one-off reminder from a match.
+         *
+         * Stored as the utterance "say <thing>", so a reminder is simply a scheduled command
+         * and reuses the whole existing pipeline rather than needing a parallel one.
+         */
+        fun MatchResult.reminder(what: Int, time: Int): List<NovaAction>? {
+            val thing = groupValues[what].trim().ifEmpty { return null }
+            val at = TimeOfDay.parse("at ${groupValues[time]}") ?: return null
+
+            return listOf(
+                NovaAction.CreateRoutine(
+                    trigger = RoutineTrigger.OnceAt(at),
+                    command = "say $thing",
+                    spokenSchedule = "at ${at.spoken()}",
+                ),
+            )
+        }
 
         /** Picks the audio stream named in the utterance, defaulting to media. */
         fun streamIn(text: String): VolumeStream = when {

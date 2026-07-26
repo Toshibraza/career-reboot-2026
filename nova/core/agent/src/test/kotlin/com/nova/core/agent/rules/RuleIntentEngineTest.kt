@@ -5,6 +5,8 @@ import com.nova.core.agent.LevelChange
 import com.nova.core.agent.NovaAction
 import com.nova.core.agent.ScrollDirection
 import com.nova.core.agent.VolumeStream
+import com.nova.core.agent.routine.RoutineTrigger
+import com.nova.core.agent.routine.TimeOfDay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -199,6 +201,57 @@ class RuleIntentEngineTest {
         // A bare "and" guard would wrongly reject these.
         assertEquals(NovaAction.OpenApp("black and white"), parse("open black and white"))
         assertEquals(NovaAction.OpenApp("sound and vibration"), parse("open sound and vibration"))
+    }
+
+    // --- Routines ----------------------------------------------------------------------
+
+    @Test
+    fun `schedules a daily routine around an existing command`() {
+        assertEquals(
+            NovaAction.CreateRoutine(
+                trigger = RoutineTrigger.Daily(TimeOfDay(8, 0)),
+                command = "open spotify",
+                spokenSchedule = "every day at 8 am",
+            ),
+            parse("every morning at 8 open spotify"),
+        )
+    }
+
+    @Test
+    fun `a routine stores the utterance, not a parsed plan`() {
+        // Storing the words means a routine created today benefits from every later
+        // improvement to the parser, and the whole command vocabulary works inside one.
+        val action = parse("every day at 10 pm, turn on the flashlight") as NovaAction.CreateRoutine
+        assertEquals("turn on the flashlight", action.command)
+        assertEquals(RoutineTrigger.Daily(TimeOfDay(22, 0)), action.trigger)
+    }
+
+    @Test
+    fun `reminders work in both phrasings and fire once`() {
+        val toAt = parse("remind me to buy milk at 6 pm") as NovaAction.CreateRoutine
+        assertEquals(RoutineTrigger.OnceAt(TimeOfDay(18, 0)), toAt.trigger)
+        assertEquals("say buy milk", toAt.command)
+
+        val atTo = parse("remind me at 6 pm to buy milk") as NovaAction.CreateRoutine
+        assertEquals(toAt, atTo)
+    }
+
+    @Test
+    fun `a reminder with no time declines rather than firing never`() {
+        // Scheduling it for an invented time would be worse than admitting it wasn't understood.
+        val plan = runBlocking { engine.plan("remind me to buy milk", AgentContext()) }
+        assertTrue(plan.actions.single() is NovaAction.Unsupported)
+    }
+
+    @Test
+    fun `say speaks the words back with casing intact`() {
+        assertEquals(NovaAction.Speak("Buy milk on the way home"), parse("say Buy milk on the way home"))
+    }
+
+    @Test
+    fun `lists and deletes routines`() {
+        assertEquals(NovaAction.ListRoutines, parse("list my routines"))
+        assertEquals(NovaAction.DeleteRoutine("buy milk"), parse("cancel the reminder to buy milk"))
     }
 
     // --- Memory ------------------------------------------------------------------------

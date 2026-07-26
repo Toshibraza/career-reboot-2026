@@ -62,6 +62,7 @@ dependencies {
     implementation(project(":feature:accessibility"))
     implementation(project(":feature:localllm"))
     implementation(project(":feature:memory"))
+    implementation(project(":feature:routines"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

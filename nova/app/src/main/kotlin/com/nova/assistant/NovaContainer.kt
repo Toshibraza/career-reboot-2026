@@ -18,6 +18,10 @@ import com.nova.core.speech.SpeechToText
 import com.nova.core.speech.GatedWakeWordDetector
 import com.nova.core.speech.WakeWordDetector
 import com.nova.core.agent.memory.Memory
+import com.nova.core.agent.routine.RoutineStore
+import com.nova.feature.routines.RoutineActionExecutor
+import com.nova.feature.routines.RoutineScheduler
+import com.nova.feature.routines.SqliteRoutineStore
 import com.nova.core.agent.screen.ScreenReader
 import com.nova.feature.memory.MemoryActionExecutor
 import com.nova.feature.memory.SqliteMemory
@@ -59,6 +63,12 @@ class NovaContainer(context: Context) {
 
     /** Everything Nova has been told to remember. Local, and never leaves the device. */
     val memory: Memory by lazy { SqliteMemory(appContext) }
+
+    val routines: RoutineStore by lazy { SqliteRoutineStore(appContext) }
+
+    val routineScheduler: RoutineScheduler by lazy {
+        RoutineScheduler(appContext, RoutineReceiver::class.java)
+    }
 
     val apiKeys: ApiKeyStore by lazy { ApiKeyStore(appContext) }
 
@@ -107,6 +117,7 @@ class NovaContainer(context: Context) {
                 DeviceActionExecutor(deviceController, appRegistry),
                 AccessibilityActionExecutor(screenReader),
                 MemoryActionExecutor(memory),
+                RoutineActionExecutor(routines, routineScheduler),
                 SpeakActionExecutor(),
             ),
             contextProvider = {

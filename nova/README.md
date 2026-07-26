@@ -152,6 +152,39 @@ Three decisions:
 *when*, not *what* — so it declines rather than filing it as a fact and losing the part that
 matters.
 
+### Routines and reminders
+
+```
+"every morning at 8 open spotify"     -> I'll open spotify every day at 8 am.
+"remind me to buy milk at 6 pm"       -> I'll remind you to buy milk at 6 pm.
+"list my routines"                    -> open spotify every day at 8 am. remind you to buy milk at 6 pm
+"cancel the reminder to buy milk"     -> Cancelled remind you to buy milk.
+```
+
+**A routine stores the utterance, not a parsed plan.** "Every morning at 8 open spotify" is kept
+as the words `open spotify`, run through the full agent when the alarm fires. So the entire
+command vocabulary works inside a routine for free, and one created today benefits from every
+later improvement to the parser instead of freezing whatever it understood at the time.
+
+A reminder is the same machinery: `remind me to buy milk` is stored as the command `say buy
+milk`, scheduled once. That is also why `say` exists as a command in its own right.
+
+Decisions:
+
+- **Scheduling rules are evaluated before everything else.** They wrap another command, and the
+  flashlight rule matches "flashlight" anywhere — so "every day at 10 pm turn on the flashlight"
+  would otherwise switch the torch on immediately instead of scheduling it. Pinned by a test.
+- **Inexact alarms.** Exact alarms need `SCHEDULE_EXACT_ALARM`, a permission the user must grant
+  on a settings screen since Android 12, and demanding that to play music at 8 am is
+  disproportionate. The cost is drift: a reminder set for 00:28 fired at **00:28:46** on device.
+  Fine for "every morning", worth knowing before trusting it with medication.
+- **Daily routines are re-armed after each firing** rather than using a repeating alarm, so one
+  deleted at noon does not come back at eight tomorrow.
+- **The schedule is read back aloud.** A reminder set for the wrong time is worse than one that
+  failed outright, and hearing "at 6 pm" is how the user catches a mis-parse.
+- **Alarms do not survive a reboot**, so `RoutineReceiver` re-arms everything on
+  `BOOT_COMPLETED` and after the app is updated.
+
 ### Multi-step tasks
 
 Anything the rule engine can't parse escalates to a `TaskPlanner`, which drives an **observe-act

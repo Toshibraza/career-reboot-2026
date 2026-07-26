@@ -9,6 +9,9 @@
     <!-- Android 13+ needs this at runtime before the listening notification will show. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Alarms are cleared by a reboot; routines have to be put back afterwards. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:name=".NovaApplication"
         android:allowBackup="false"
@@ -43,6 +46,18 @@
             android:name=".NovaListeningService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <receiver
+            android:name=".RoutineReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nova.assistant.RUN_ROUTINE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -56,6 +56,22 @@ sealed interface NovaAction {
 
     data class ForgetMemory(val subject: String) : NovaAction
 
+    /**
+     * Schedule [command] to run at [trigger].
+     *
+     * The command is an utterance, not a parsed plan — see [com.nova.core.agent.routine.Routine].
+     */
+    data class CreateRoutine(
+        val trigger: com.nova.core.agent.routine.RoutineTrigger,
+        val command: String,
+        /** What to say back when it is created, e.g. "every day at 8 am". */
+        val spokenSchedule: String,
+    ) : NovaAction
+
+    data object ListRoutines : NovaAction
+
+    data class DeleteRoutine(val query: String) : NovaAction
+
     data class SetFlashlight(val on: Boolean) : NovaAction
 
     data class SetVolume(val stream: VolumeStream, val level: LevelChange) : NovaAction
