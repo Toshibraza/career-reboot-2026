@@ -76,6 +76,24 @@ sealed interface NovaAction {
     data object ReadNotifications : NovaAction
 
     /**
+     * Place a call to a contact matched by name.
+     *
+     * Never dials directly. Two lossy steps stand between the user and the number — speech
+     * recognition, then fuzzy name matching — so this only ever proposes, and the call is
+     * placed by [ConfirmPending] after the user hears who and which number.
+     */
+    data class CallContact(val query: String) : NovaAction
+
+    /** Propose an SMS. Same rule: proposes only, never sends. */
+    data class SendSms(val query: String, val message: String) : NovaAction
+
+    /** Carry out whatever was last proposed. */
+    data object ConfirmPending : NovaAction
+
+    /** Throw away whatever was last proposed. */
+    data object CancelPending : NovaAction
+
+    /**
      * Read the screen's text as pixels rather than as a node tree.
      *
      * Distinct from [ReadScreen], which lists controls an app exposes. This is for what

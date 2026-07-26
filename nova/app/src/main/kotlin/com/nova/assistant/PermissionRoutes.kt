@@ -58,6 +58,12 @@ fun Context.openSettingsFor(permission: RequiredPermission) {
         RequiredPermission.RECORD_AUDIO,
         RequiredPermission.CAMERA,
         RequiredPermission.DEVICE_ADMIN,
+        // Contacts, calling and SMS are runtime permissions, so the app asks for them with a
+        // dialog. Landing here means the user chose "don't ask again", and the app details
+        // page is the only remaining route.
+        RequiredPermission.READ_CONTACTS,
+        RequiredPermission.CALL_PHONE,
+        RequiredPermission.SEND_SMS,
         -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri)
     }
 

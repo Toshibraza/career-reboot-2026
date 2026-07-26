@@ -203,6 +203,62 @@ class RuleIntentEngineTest {
         assertEquals(NovaAction.OpenApp("sound and vibration"), parse("open sound and vibration"))
     }
 
+    // --- Calls and messages ------------------------------------------------------------
+
+    @Test
+    fun `calling names a person, not an app`() {
+        assertEquals(NovaAction.CallContact("Mom"), parse("call Mom"))
+        assertEquals(NovaAction.CallContact("Amit Kumar"), parse("call Amit Kumar"))
+    }
+
+    @Test
+    fun `call with no one named declines`() = runTest {
+        // "Call back" names nobody, and guessing who would be the worst possible reading.
+        listOf("call back", "call again", "call someone").forEach {
+            val plan = engine.plan(it, AgentContext())
+            assertTrue("expected '$it' to decline", plan.actions.single() is NovaAction.Unsupported)
+        }
+    }
+
+    @Test
+    fun `messages separate the name from the text`() {
+        assertEquals(
+            NovaAction.SendSms("Amit", "I'm reaching in 10 minutes"),
+            parse("text Amit saying I'm reaching in 10 minutes"),
+        )
+        assertEquals(
+            NovaAction.SendSms("Amit", "on my way"),
+            parse("message Amit on my way"),
+        )
+    }
+
+    @Test
+    fun `message text keeps its casing and punctuation`() {
+        val action = parse("text Priya saying Running late, see you at 7!") as NovaAction.SendSms
+        assertEquals("Running late, see you at 7!", action.message)
+    }
+
+    @Test
+    fun `yes and no map to confirm and cancel`() {
+        assertEquals(NovaAction.ConfirmPending, parse("yes"))
+        assertEquals(NovaAction.ConfirmPending, parse("go ahead"))
+        assertEquals(NovaAction.CancelPending, parse("cancel"))
+        assertEquals(NovaAction.CancelPending, parse("never mind"))
+    }
+
+    @Test
+    fun `confirmation words are exact matches only`() = runTest {
+        // A stray leading "yes" must never confirm a pending call. It is fine for this to be
+        // unrecognised — what matters is that it is not treated as consent.
+        listOf("yes open youtube", "yes please call him", "no thanks I meant later").forEach {
+            val action = engine.plan(it, AgentContext()).actions.single()
+            assertTrue(
+                "'$it' must not be read as confirmation",
+                action != NovaAction.ConfirmPending,
+            )
+        }
+    }
+
     // --- Routines ----------------------------------------------------------------------
 
     @Test

@@ -489,4 +489,7 @@ private fun RequiredPermission.explain(): String = when (this) {
     RequiredPermission.NOTIFICATION_LISTENER -> "Allow notification access so Nova can read notifications."
     RequiredPermission.USAGE_STATS -> "Allow usage access so Nova can tell which app is open."
     RequiredPermission.DEVICE_ADMIN -> "Nova needs device admin rights for that."
+    RequiredPermission.READ_CONTACTS -> "Allow contacts access so Nova can find who you mean."
+    RequiredPermission.CALL_PHONE -> "Allow Nova to place calls."
+    RequiredPermission.SEND_SMS -> "Allow Nova to send messages."
 }

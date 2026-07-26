@@ -23,6 +23,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nova.core.agent.RequiredPermission
 import com.nova.feature.accessibility.NovaAccessibilityService
 import com.nova.feature.localllm.LocalModelStore
 import com.nova.feature.localllm.ModelStatus
@@ -88,6 +89,13 @@ class MainActivity : ComponentActivity() {
                     micGranted = granted
                 }
 
+                // Contacts, calling and messaging are ordinary runtime permissions. Sending
+                // the user to a settings page for those would be worse than the dialog
+                // Android already provides, so the card asks directly.
+                val runtimeLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) { }
+
                 // Accessibility and WRITE_SETTINGS are granted on a settings screen, so the
                 // only reliable moment to re-read them is when the user comes back to us.
                 DisposableEffect(Unit) {
@@ -130,7 +138,14 @@ class MainActivity : ComponentActivity() {
                     onMicTap = viewModel::toggleListening,
                     onSubmit = viewModel::submit,
                     onRequestMic = { permissionLauncher() },
-                    onOpenSettingsFor = context::openSettingsFor,
+                    onOpenSettingsFor = { permission ->
+                        val runtime = permission.runtimePermission()
+                        if (runtime != null) {
+                            runtimeLauncher.launch(arrayOf(runtime))
+                        } else {
+                            context.openSettingsFor(permission)
+                        }
+                    },
                     onDismissPermissionPrompt = viewModel::dismissPermissionPrompt,
                     onAlwaysListeningChange = { enabled ->
                         alwaysListening = enabled
@@ -192,6 +207,19 @@ class MainActivity : ComponentActivity() {
             ModelStatus.NotInstalled ->
                 if (keys.hasKey()) "OpenAI key ${keys.masked()}" else "Needs a model or an API key"
         }
+
+    /**
+     * The Android permission behind a [RequiredPermission], when it is one the app can ask
+     * for directly. Null for the ones that only a settings screen can grant.
+     */
+    private fun RequiredPermission.runtimePermission(): String? = when (this) {
+        RequiredPermission.READ_CONTACTS -> Manifest.permission.READ_CONTACTS
+        RequiredPermission.CALL_PHONE -> Manifest.permission.CALL_PHONE
+        RequiredPermission.SEND_SMS -> Manifest.permission.SEND_SMS
+        RequiredPermission.RECORD_AUDIO -> Manifest.permission.RECORD_AUDIO
+        RequiredPermission.CAMERA -> Manifest.permission.CAMERA
+        else -> null
+    }
 
     private fun hasMicPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==

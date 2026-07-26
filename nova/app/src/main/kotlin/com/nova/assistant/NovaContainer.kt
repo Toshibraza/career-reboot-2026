@@ -17,7 +17,10 @@ import com.nova.core.speech.Speaker
 import com.nova.core.speech.SpeechToText
 import com.nova.core.speech.GatedWakeWordDetector
 import com.nova.core.speech.WakeWordDetector
+import com.nova.core.agent.comms.ConfirmationSlot
 import com.nova.core.agent.memory.Memory
+import com.nova.feature.comms.CommsActionExecutor
+import com.nova.feature.comms.ContactDirectory
 import com.nova.core.agent.notifications.NotificationReader
 import com.nova.feature.notifications.ListenerNotificationReader
 import com.nova.feature.notifications.NotificationActionExecutor
@@ -84,6 +87,16 @@ class NovaContainer(context: Context) {
     /** OCR for what the node tree cannot see. Offline, and nothing is written to disk. */
     private val screenTextReader by lazy { ScreenTextReader() }
 
+    private val contacts by lazy { ContactDirectory(appContext) }
+
+    /**
+     * Holds a proposed call or message until the user confirms it.
+     *
+     * Shared across the whole app so a confirmation can arrive through any route — the mic,
+     * the text box, or the always-listening service.
+     */
+    private val confirmations = ConfirmationSlot()
+
     val routineScheduler: RoutineScheduler by lazy {
         RoutineScheduler(appContext, RoutineReceiver::class.java)
     }
@@ -138,6 +151,7 @@ class NovaContainer(context: Context) {
                 RoutineActionExecutor(routines, routineScheduler),
                 NotificationActionExecutor(notifications),
                 VisionActionExecutor(screenTextReader),
+                CommsActionExecutor(appContext, contacts, confirmations),
                 SpeakActionExecutor(),
             ),
             contextProvider = {

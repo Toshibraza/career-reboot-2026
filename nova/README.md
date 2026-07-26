@@ -173,6 +173,39 @@ Three decisions:
 *when*, not *what* — so it declines rather than filing it as a fact and losing the part that
 matters.
 
+### Calls and messages
+
+```
+"call Mom"                        -> Call Mom on 9 8 7 6 5 4 3 2 1 0? Say yes to confirm.
+"text Amit saying I'm late"       -> Text Amit, "I'm late"? Say yes to confirm.
+"yes"                             -> Calling Mom.
+"cancel"                          -> Cancelled.
+```
+
+**Nothing here acts on the first instruction.** Every other executor in Nova runs immediately,
+because turning on a torch is undoable and asking permission for it would be theatre. A call and
+a message are not undoable — the other person's phone rings, the message is delivered — and two
+lossy steps sit between the user and the outcome: speech recognition, then fuzzy name matching.
+
+So the safety is in the design, not in a warning:
+
+- **The read-back names the person *and* the number.** The number is the only part that catches a
+  wrong-contact match, and it is spoken digit by digit so it is actually intelligible.
+- **A confirmation expires after 60 seconds.** Without that, a "yes" said much later — to someone
+  in the room, to a podcast, to nothing — would place a call the user never asked for.
+- **A confirmation is spent once.** A second "yes" does not place a second call.
+- **A new proposal replaces the old one**, so "call Amit… no wait, text Priya… yes" cannot ring
+  Amit.
+- **"Yes" with nothing pending does nothing**, and confirmation words are matched exactly — a
+  stray leading "yes" in a longer sentence is never consent.
+- **An unresolved name is a failure, never a number to dial.** "Call Amit" with no Amit in the
+  address book does not fall back to dialling the raw text.
+- **"Call back" and "call again" decline**, because they name nobody and guessing would be the
+  worst possible reading.
+
+Messages need a marker — "text Amit **saying** I'm late" — or a single-word name. Anything more
+ambiguous declines rather than guessing where the name ends and the message begins.
+
 ### Notifications
 
 "Read my notifications", "what did I miss". Needs notification access, granted under Settings →

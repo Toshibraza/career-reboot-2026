@@ -147,6 +147,48 @@ class RuleIntentEngine : IntentEngine {
                 listOf(NovaAction.DeleteRoutine(it.group(1).trim()))
             },
 
+            // --- Reaching people ---------------------------------------------------------
+            // Before the app rules: "call Mom" is a person, not an app called Mom. Both of
+            // these only ever propose — nothing here dials or sends.
+            rule("send-sms", "^(?:text|message|sms|send)\\b") {
+                // Marker form first ("text Amit saying I'm late"), because it separates the
+                // name from the message unambiguously. The bare form ("text Amit I'm late")
+                // has to guess where the name ends, so it only accepts a single-word name —
+                // and a wrong guess there surfaces as "I couldn't find a contact called my"
+                // rather than a message to the wrong person.
+                val match = SMS_WITH_MARKER.find(it.raw.trim())
+                    ?: SMS_SINGLE_WORD_NAME.find(it.raw.trim())
+                    ?: return@rule null
+
+                val who = match.groupValues[1].trim()
+                val what = match.groupValues[2].trim()
+
+                if (who.isBlank() || what.isBlank()) return@rule null
+                listOf(NovaAction.SendSms(who, what))
+            },
+
+            rule("call", "^(?:call|phone|ring|dial)\\s+(.+)$") {
+                // From the raw utterance, so a name keeps its capitals. It is read back to
+                // the user before dialling, and "call amit kumar?" looks like a bug.
+                val who = (it.rawAfter("call", "phone", "ring", "dial") ?: it.group(1)).trim()
+                // "call back" and "call again" name no one, and guessing who would be the
+                // worst possible interpretation.
+                if (who.isBlank() || who.lowercase() in AMBIGUOUS_CALL_TARGETS) return@rule null
+                listOf(NovaAction.CallContact(who))
+            },
+
+            simpleRule(
+                "confirm",
+                "^(?:yes|yeah|yep|confirm|do it|go ahead|send it|call (?:them|him|her))$",
+                NovaAction.ConfirmPending,
+            ),
+
+            simpleRule(
+                "cancel",
+                "^(?:no|nope|cancel|stop|never mind|nevermind|forget it)$",
+                NovaAction.CancelPending,
+            ),
+
             // --- Torch -------------------------------------------------------------------
             // Registered first among the direct commands: "close the torch" must not reach
             // the close-app rule.
@@ -364,6 +406,20 @@ class RuleIntentEngine : IntentEngine {
 
         /** Longer than this and it is a sentence, not something Nova was told to remember. */
         const val MAX_SUBJECT_WORDS = 5
+
+        /** Phrases that follow "call" without naming anybody. */
+        val AMBIGUOUS_CALL_TARGETS = setOf("back", "again", "them", "him", "her", "someone")
+
+        val SMS_WITH_MARKER = Regex(
+            "^(?:text|message|sms|send)\\s+(?:a\\s+(?:text|message)\\s+to\\s+)?(.+?)\\s+" +
+                "(?:saying|that says|:)\\s+(.+)$",
+            RegexOption.IGNORE_CASE,
+        )
+
+        val SMS_SINGLE_WORD_NAME = Regex(
+            "^(?:text|message|sms)\\s+(\\S+)\\s+(.+)$",
+            RegexOption.IGNORE_CASE,
+        )
 
         /** A clock time as spoken: "6", "6:30", "6 pm", "18:00". */
         const val TIME = "\\d{1,2}(?::\\d{2})?(?:\\s*[ap]m)?"

@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":feature:routines"))
     implementation(project(":feature:notifications"))
     implementation(project(":feature:vision"))
+    implementation(project(":feature:comms"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

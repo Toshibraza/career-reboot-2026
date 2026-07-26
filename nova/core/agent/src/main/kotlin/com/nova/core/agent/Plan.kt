@@ -78,6 +78,9 @@ sealed interface ActionResult {
 enum class RequiredPermission {
     RECORD_AUDIO,
     CAMERA,
+    READ_CONTACTS,
+    CALL_PHONE,
+    SEND_SMS,
     WRITE_SYSTEM_SETTINGS,
     ACCESSIBILITY_SERVICE,
     NOTIFICATION_LISTENER,
