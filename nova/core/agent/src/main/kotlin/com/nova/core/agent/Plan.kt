@@ -1,5 +1,7 @@
 package com.nova.core.agent
 
+import com.nova.core.agent.screen.ScreenSnapshot
+
 /**
  * What Nova decided to do about one utterance.
  *
@@ -30,13 +32,24 @@ data class Plan(
  * Deliberately small. Anything added here becomes part of the contract every future engine
  * must cope with, so it should stay to facts that genuinely change the parse.
  */
-data class AgentContext(
+class AgentContext(
     /** Human-readable labels of installed apps, used to resolve "open <app>". */
     val installedAppLabels: List<String> = emptyList(),
     /** Label of the app currently in the foreground, if known. */
     val foregroundApp: String? = null,
     val locale: String = "en",
-)
+    /**
+     * Reads the current screen on demand.
+     *
+     * A provider rather than a value, because reading the screen means inspecting whatever
+     * app the user happens to have open — a privacy-relevant act, not free context. The rule
+     * engine never calls this, so ordinary commands like "open YouTube" never look at the
+     * screen at all. Only an engine that genuinely needs to see pays that cost.
+     */
+    private val screenProvider: suspend () -> ScreenSnapshot? = { null },
+) {
+    suspend fun screen(): ScreenSnapshot? = screenProvider()
+}
 
 /** Outcome of executing one [NovaAction]. */
 sealed interface ActionResult {

@@ -115,6 +115,12 @@ class RuleIntentEngine : IntentEngine {
                 NovaAction.OpenNotifications,
             ),
 
+            simpleRule(
+                "read-screen",
+                "\\bwhat(?:s| is)? on (?:the |this )?screen\\b|\\bread (?:the |this )?screen\\b|\\bwhat (?:do you |can you )?see\\b|\\bwhat does (?:it|this) say\\b",
+                NovaAction.ReadScreen,
+            ),
+
             // --- On-screen control -------------------------------------------------------
             // Registered before the app rules: these are all anchored on their own verbs, so
             // they never collide with "open <app>", but keeping them adjacent to navigation

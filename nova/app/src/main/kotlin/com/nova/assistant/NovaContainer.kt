@@ -11,7 +11,9 @@ import com.nova.core.speech.Speaker
 import com.nova.core.speech.SpeechToText
 import com.nova.core.speech.TranscriptWakeWordDetector
 import com.nova.core.speech.WakeWordDetector
+import com.nova.core.agent.screen.ScreenReader
 import com.nova.feature.accessibility.AccessibilityActionExecutor
+import com.nova.feature.accessibility.AccessibilityScreenReader
 import com.nova.feature.device.AppRegistry
 import com.nova.feature.device.DeviceActionExecutor
 import com.nova.feature.device.DeviceController
@@ -38,6 +40,9 @@ class NovaContainer(context: Context) {
 
     private val deviceController by lazy { DeviceController(appContext) }
 
+    /** Nova's eyes. Swapped for an OCR-backed reader later without touching anything else. */
+    val screenReader: ScreenReader by lazy { AccessibilityScreenReader(appContext) }
+
     val runtime: AgentRuntime by lazy {
         AgentRuntime(
             intentEngine = RuleIntentEngine(),
@@ -46,11 +51,16 @@ class NovaContainer(context: Context) {
             // reach into other apps.
             executors = listOf(
                 DeviceActionExecutor(deviceController, appRegistry),
-                AccessibilityActionExecutor(),
+                AccessibilityActionExecutor(screenReader),
                 SpeakActionExecutor(),
             ),
             contextProvider = {
-                AgentContext(installedAppLabels = appRegistry.installedApps().map { it.label })
+                AgentContext(
+                    installedAppLabels = appRegistry.installedApps().map { it.label },
+                    // Passed as a provider, not a value: the rule engine never calls it, so
+                    // an ordinary "open YouTube" reads nothing off the user's screen.
+                    screenProvider = { screenReader.snapshot() },
+                )
             },
         )
     }

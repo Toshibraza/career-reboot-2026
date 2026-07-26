@@ -42,6 +42,9 @@ sealed interface NovaAction {
     /** Type [text] into whatever field currently has focus. */
     data class TypeText(val text: String) : NovaAction
 
+    /** Describe what is currently on screen out loud. */
+    data object ReadScreen : NovaAction
+
     data class SetFlashlight(val on: Boolean) : NovaAction
 
     data class SetVolume(val stream: VolumeStream, val level: LevelChange) : NovaAction

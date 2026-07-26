@@ -4,6 +4,7 @@ import com.nova.core.agent.ActionExecutor
 import com.nova.core.agent.ActionResult
 import com.nova.core.agent.NovaAction
 import com.nova.core.agent.RequiredPermission
+import com.nova.core.agent.screen.ScreenReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,7 +19,9 @@ import kotlinx.coroutines.withContext
  * than a failure, which is what lets the UI offer a button to the settings screen instead of a
  * dead end.
  */
-class AccessibilityActionExecutor : ActionExecutor {
+class AccessibilityActionExecutor(
+    private val screenReader: ScreenReader,
+) : ActionExecutor {
 
     override val name: String = "accessibility"
 
@@ -28,6 +31,7 @@ class AccessibilityActionExecutor : ActionExecutor {
         NovaAction.TakeScreenshot,
         NovaAction.OpenRecents,
         NovaAction.OpenNotifications,
+        NovaAction.ReadScreen,
         is NovaAction.TapLabel,
         is NovaAction.ScrollScreen,
         is NovaAction.TypeText,
@@ -64,6 +68,10 @@ class AccessibilityActionExecutor : ActionExecutor {
                 false -> ActionResult.Failure("I couldn't take a screenshot.")
                 null -> ActionResult.Failure("Screenshots need Android 11 or newer.")
             }
+
+            NovaAction.ReadScreen -> screenReader.snapshot()
+                ?.let { ActionResult.Success(it.spokenSummary()) }
+                ?: ActionResult.Failure("I can't read this screen right now.")
 
             is NovaAction.TapLabel -> tap(service, action)
 

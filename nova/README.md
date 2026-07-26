@@ -33,6 +33,7 @@ app from the background:
 | "Scroll down" | Yes — scrolled Settings while Nova stayed backgrounded |
 | "Type battery saver" | Yes — text landed in the field and returned real results |
 | "Close Chrome" | Goes home — Android has no API to close another app |
+| "What's on screen", "read the screen" | Yes — Settings, YouTube, WhatsApp and the launcher |
 
 **The voice path is verified.** Tapping the mic and saying "open YouTube" transcribed correctly
 and launched the app. Notably, the platform honoured `EXTRA_PREFER_OFFLINE` and used Google's
@@ -107,6 +108,22 @@ Four modules, split so that each capability can be replaced without touching the
 
 `:core:agent` has no Android dependency at all. That is what makes the rule engine testable in
 milliseconds without an emulator, and what will let the same planner drive a Windows client later.
+
+### Seeing the screen
+
+`ScreenReader` returns a `ScreenSnapshot`: the app, and a list of elements with their label,
+role, and whether they can be pressed or typed into. It comes from the **accessibility node
+tree, not pixels** — real labels, real roles, no transcription step to get them wrong. OCR over a
+MediaProjection capture is the right tool for photos, documents and canvas-rendered apps that
+expose nothing to accessibility, and it slots in behind this same interface when it arrives.
+
+Two decisions worth knowing:
+
+- **The screen is a provider on `AgentContext`, not a value.** Reading the screen means
+  inspecting whatever app the user has open, which is privacy-relevant rather than free
+  context. The rule engine never calls it, so "open YouTube" reads nothing.
+- **`toPrompt()` drops coordinates.** A planner should name the control it wants pressed, not a
+  pixel — that keeps taps label-based, auditable, and resilient to layout changes.
 
 ### The two seams that matter
 
