@@ -191,19 +191,28 @@ Qwen is Apache-2.0 and ungated. Gemma needs you to accept its terms on Hugging F
 
 #### Measured on this device
 
-Qwen2.5-0.5B-Instruct q8, Snapdragon 678, CPU inference:
+Both models, same goal ("open settings and search for bluetooth"), Snapdragon 678, CPU
+inference, screen visible on every step:
 
-| | |
-| --- | --- |
-| Model load | ~15 s (once per process) |
-| Per planning step | ~14 s for a ~150 character reply |
-| A full 8-step loop | ~2 minutes |
+| | Qwen2.5-0.5B q8 (521 MB) | Gemma3-1B-IT int4 (529 MB) |
+| --- | --- | --- |
+| First generation | ~14 s | ~88 s — building the xnnpack cache |
+| Warm, per step | ~14 s | ~19 s |
+| Reply quality | valid, wordy | valid, terse — cleaner |
+| Result | `open_app Settings` × 8 | `open_app Settings` × 8 |
 
-**It runs, and it cannot plan.** Given the goal "open settings and search for bluetooth", with
-the screen visible on every step and its own history accumulating in the prompt, it chose
-`open_app Settings` eight times in a row and never progressed. Verified it was not a plumbing
-fault: `screen visible: true` on every call, prompt growing 2736 → 3039 characters as history
-built up. The model receives the feedback and cannot use it.
+**Both run. Neither can plan.** Each chose the *correct first action* and then repeated it until
+the step cap stopped them, with `screen visible: true` on every call and the prompt growing 2736
+→ 3039 characters as history accumulated. They receive the feedback and cannot act on it.
+
+Gemma writes better JSON and reasons more tersely than Qwen, and being twice the parameters did
+**not** buy the ability to use its own history. That is the finding: on this hardware the
+limitation is not which 1B-class model you pick.
+
+Note the cold-start trap when benchmarking: MediaPipe writes a `model.task.xnnpack_cache` beside
+the model on first load. Measure the first generation and you get ~88 s; measure the second and
+you get ~19 s. Delete that cache when swapping models, or the next one loads against the wrong
+compiled graph.
 
 Two prompt bugs were found and fixed on the way, both worth knowing if you swap the model:
 
@@ -213,10 +222,13 @@ Two prompt bugs were found and fixed on the way, both worth knowing if you swap 
   Small models imitate shape far more reliably than they follow instructions.
 
 So on this hardware the useful split is: **rules handle the daily commands offline and
-instantly**, and multi-step planning needs either a stronger local model or the API.
-`Gemma3-1B-IT` is the obvious next thing to try — noticeably better at instruction-following and
-it fits in memory — but it is gated, so it needs a Hugging Face token and accepting Google's
-licence.
+instantly**, and multi-step planning needs a model larger than this phone can hold. Both 1B-class
+candidates that fit were tried and both failed the same way. Anything bigger — Qwen2.5-1.5B needs
+~2.3 GB free against ~1.9 GB available — does not load at all.
+
+Everything else in Nova already runs offline: speech in, speech out, wake word, every device
+control, every cross-app action, and screen reading. Multi-step planning is the one capability
+that is not offline-capable on this class of hardware.
 
 The MediaPipe native libraries take the APK from about 18 MB to about 66 MB.
 
