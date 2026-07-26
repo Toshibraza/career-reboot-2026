@@ -50,7 +50,7 @@ class NotificationActionExecutor(
         when (reader.availability) {
             NotificationAccess.NOT_GRANTED -> ActionResult.NeedsPermission(
                 RequiredPermission.NOTIFICATION_LISTENER,
-                "Give Nova notification access and I can read them.",
+                "Give Raza notification access and I can read them.",
             )
 
             NotificationAccess.NOT_CONNECTED -> ActionResult.Failure(

@@ -45,7 +45,7 @@ class AccessibilityActionExecutor(
         val service = NovaAccessibilityService.connected
             ?: return@withContext ActionResult.NeedsPermission(
                 RequiredPermission.ACCESSIBILITY_SERVICE,
-                "Turn on Nova's accessibility service and I can do that.",
+                "Turn on Raza's accessibility service and I can do that.",
             )
 
         when (action) {

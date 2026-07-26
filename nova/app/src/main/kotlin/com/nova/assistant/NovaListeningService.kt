@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -49,9 +50,12 @@ class NovaListeningService : Service() {
 
     private fun listenForWakeWord() {
         scope.launch {
-            container.wakeWordDetector.detections().collect {
-                handleOneCommand()
-            }
+            Log.i(TAG, "listening service started")
+            runCatching {
+                container.wakeWordDetector.detections().collect {
+                    handleOneCommand()
+                }
+            }.onFailure { Log.w(TAG, "wake word loop stopped", it) }
         }
     }
 
@@ -61,9 +65,22 @@ class NovaListeningService : Service() {
         val utterance = container.speechToText.transcribe()
             .mapNotNull { (it as? SpeechEvent.Final)?.text }
             .firstOrNull()
-            ?: return
+
+        if (utterance.isNullOrBlank()) {
+            Log.i(TAG, "woke, but heard no command")
+            container.speaker.speak("I didn't catch that.")
+            return
+        }
+
+        Log.i(TAG, "command: \"$utterance\"")
+
+        // Repeated back before acting. With no screen in front of them the user has no other
+        // way to know what was understood, and hearing the wrong command before it happens is
+        // the difference between catching a mistake and discovering it afterwards.
+        container.speaker.speak("You said, $utterance")
 
         val response = container.runtime.handle(utterance)
+        Log.i(TAG, "-> ${response.spoken}")
         container.speaker.speak(response.spoken)
     }
 
@@ -114,6 +131,7 @@ class NovaListeningService : Service() {
     }
 
     companion object {
+        private const val TAG = "NovaWake"
         private const val CHANNEL_ID = "nova-listening"
         private const val NOTIFICATION_ID = 1
 

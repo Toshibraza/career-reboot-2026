@@ -1,5 +1,6 @@
 package com.nova.core.speech
 
+import android.util.Log
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -36,37 +37,70 @@ interface WakeWordDetector {
 class GatedWakeWordDetector(
     private val speechToText: SpeechToText,
     private val gate: VoiceActivityGate = VoiceActivityGate(),
-    override val phrase: String = "nova",
+    override val phrase: String = "raza",
     private val languageTag: String = "en-IN",
     /** Breathing room so one holder has fully released the microphone before the next opens it. */
     private val handoverDelayMillis: Long = 250,
 ) : WakeWordDetector {
 
-    private val needle = Regex("\\b${Regex.escape(phrase.lowercase())}\\b")
+    /**
+     * The wake phrase and the near-misses a recogniser produces for it.
+     *
+     * A personal name is not in the recogniser's vocabulary, so it comes back as whatever real
+     * word sounds closest — "razor", "rasa", "raise a". Matching only the exact spelling is why
+     * a wake word appears not to work when it is being heard perfectly well.
+     */
+    private val needle = Regex(
+        "\\b(?:${(listOf(phrase) + HOMOPHONES).joinToString("|") { Regex.escape(it.lowercase()) }})\\b",
+    )
+
+    private companion object {
+        const val TAG = "NovaWake"
+
+        val HOMOPHONES = listOf("razor", "rasa", "razaa", "rezza", "raiser", "raza's")
+    }
 
     override fun detections(): Flow<Unit> = flow {
+        Log.i(TAG, "wake word active, listening for \"$phrase\"")
+
         while (true) {
             // Collected only until the first speech onset, so the gate releases the microphone
             // before the recogniser needs it.
             gate.speechStarts().first()
             delay(handoverDelayMillis)
 
-            if (heardWakePhrase()) emit(Unit)
+            if (heardWakePhrase()) {
+                Log.i(TAG, "wake phrase heard")
+                emit(Unit)
+            }
             delay(handoverDelayMillis)
         }
     }
 
     private suspend fun heardWakePhrase(): Boolean {
         var heard = false
+        var lastHeard = ""
+
         speechToText.transcribe(languageTag).collect { event ->
             val text = when (event) {
                 is SpeechEvent.Partial -> event.text
                 is SpeechEvent.Final -> event.text
+                is SpeechEvent.Failed -> {
+                    Log.i(TAG, "recogniser gave up: ${event.reason}")
+                    null
+                }
                 else -> null
             }
+            if (text != null) lastHeard = text
             if (!heard && text != null && needle.containsMatchIn(text.lowercase())) {
                 heard = true
             }
+        }
+
+        // The single most useful line when the wake word "doesn't work": it usually did hear
+        // something, just not the phrase.
+        if (!heard && lastHeard.isNotBlank()) {
+            Log.i(TAG, "heard \"$lastHeard\" but it did not contain \"$phrase\"")
         }
         return heard
     }
@@ -81,7 +115,7 @@ class GatedWakeWordDetector(
  */
 class TranscriptWakeWordDetector(
     private val speechToText: SpeechToText,
-    override val phrase: String = "nova",
+    override val phrase: String = "raza",
     private val languageTag: String = "en-IN",
     /** Pause between sessions, so a failing recogniser can't spin at 100% CPU. */
     private val retryDelayMillis: Long = 400,

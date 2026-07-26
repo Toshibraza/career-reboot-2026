@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Nova</string>
+    <string name="app_name">Raza</string>
     <string name="listening_channel_name">Always listening</string>
-    <string name="listening_notification_title">Nova is listening</string>
-    <string name="listening_notification_text">Say \"Nova\" to give a command.</string>
+    <string name="listening_notification_title">Raza is listening</string>
+    <string name="listening_notification_text">Say \"Raza\" to give a command.</string>
 </resources>

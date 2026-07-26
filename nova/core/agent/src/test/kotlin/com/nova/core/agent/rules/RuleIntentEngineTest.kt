@@ -33,7 +33,16 @@ class RuleIntentEngineTest {
 
     @Test
     fun `strips the wake word and politeness`() {
-        assertEquals(NovaAction.OpenApp("camera"), parse("Hey Nova, please open the camera"))
+        assertEquals(NovaAction.OpenApp("camera"), parse("Hey Raza, please open the camera"))
+    }
+
+    @Test
+    fun `wake word near-misses are stripped too`() {
+        // "Raza" is not in the recogniser's vocabulary, so it comes back as whatever real word
+        // sounds closest. Stripping only the exact spelling is why a wake word appears not to
+        // work when it was heard perfectly well.
+        assertEquals(NovaAction.OpenApp("youtube"), parse("razor open youtube"))
+        assertEquals(NovaAction.OpenApp("youtube"), parse("hey rasa, open youtube"))
     }
 
     @Test
@@ -399,7 +408,7 @@ class RuleIntentEngineTest {
         // These all start with question words or would otherwise be caught by the recall
         // pattern, and each must keep its original meaning.
         assertEquals(NovaAction.ReadScreen, parse("what is on screen"))
-        assertEquals(NovaAction.Speak("I'm Nova, your assistant on this phone."), parse("who are you"))
+        assertEquals(NovaAction.Speak("I'm Raza, your assistant on this phone."), parse("who are you"))
     }
 
     // --- Fallback ----------------------------------------------------------------------

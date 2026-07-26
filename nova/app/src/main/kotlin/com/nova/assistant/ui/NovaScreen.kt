@@ -75,7 +75,7 @@ fun NovaScreen(
 
             if (!micGranted) {
                 ActionCard(
-                    text = "Nova needs microphone access to hear you.",
+                    text = "Raza needs microphone access to hear you.",
                     button = "Grant",
                     onClick = onRequestMic,
                 )
@@ -86,7 +86,7 @@ fun NovaScreen(
             // what Nova can do is invisible, and the user has no reason to go looking.
             if (micGranted && !accessibilityEnabled && state.pendingPermission == null) {
                 ActionCard(
-                    text = "Turn on Nova's accessibility service to control other apps — tap, scroll, type, lock.",
+                    text = "Turn on Raza's accessibility service to control other apps — tap, scroll, type, lock.",
                     button = "Enable",
                     onClick = { onOpenSettingsFor(RequiredPermission.ACCESSIBILITY_SERVICE) },
                 )
@@ -137,11 +137,10 @@ fun NovaScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            MicButton(
-                listening = state.status == NovaStatus.LISTENING,
-                level = state.level,
-                enabled = micGranted,
-                onTap = onMicTap,
+            VoiceOrb(
+                mode = state.status.toOrbMode(),
+                amplitude = state.level,
+                onTap = { if (micGranted) onMicTap() else onRequestMic() },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
 
@@ -150,11 +149,18 @@ fun NovaScreen(
     }
 }
 
+private fun NovaStatus.toOrbMode(): OrbMode = when (this) {
+    NovaStatus.IDLE -> OrbMode.IDLE
+    NovaStatus.LISTENING -> OrbMode.LISTENING
+    NovaStatus.THINKING -> OrbMode.THINKING
+    NovaStatus.SPEAKING -> OrbMode.SPEAKING
+}
+
 @Composable
 private fun Header(status: NovaStatus) {
     Column {
         Text(
-            text = "Nova",
+            text = "Raza",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
         )
@@ -184,7 +190,7 @@ private fun AssistGestureRow(onOpenAssistantSettings: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text("Assistant gesture", style = MaterialTheme.typography.bodyLarge)
             Text(
-                text = "Set Nova as your assistant app — hold power or swipe a corner to talk. " +
+                text = "Set Raza as your assistant app — hold power or swipe a corner to talk. " +
                     "No battery cost.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -206,7 +212,7 @@ private fun AlwaysListeningRow(
             Text(
                 // Still honest: the gate cuts the idle cost, but a room with talking in it
                 // still wakes the recogniser repeatedly.
-                text = "Wake on \"Nova\". Only listens properly once it hears a voice, " +
+                text = "Wake on \"Raza\". Only listens properly once it hears a voice, " +
                     "but still costs battery in a noisy room.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -277,7 +283,7 @@ private fun ApiKeyDialog(
             Column {
                 Text(
                     text = "Used only for commands the built-in rules can't handle. " +
-                        "Stored on this device, in Nova's private storage.",
+                        "Stored on this device, in Raza's private storage.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -422,45 +428,6 @@ private fun CommandInput(onSubmit: (String) -> Unit) {
 }
 
 @Composable
-private fun MicButton(
-    listening: Boolean,
-    level: Float,
-    enabled: Boolean,
-    onTap: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // The button breathes with mic level, so it is obvious at a glance that audio is arriving.
-    val scale by animateFloatAsState(
-        targetValue = if (listening) 1f + level * 0.25f else 1f,
-        label = "mic-pulse",
-    )
-
-    Box(
-        modifier = modifier
-            .scale(scale)
-            .size(84.dp)
-            .clip(CircleShape)
-            .background(
-                if (listening) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        IconButton(onClick = onTap, enabled = enabled, modifier = Modifier.fillMaxSize()) {
-            Icon(
-                imageVector = if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
-                contentDescription = if (listening) "Stop listening" else "Start listening",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(34.dp),
-            )
-        }
-    }
-}
-
-@Composable
 private fun ActionCard(text: String, button: String, onClick: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -481,15 +448,15 @@ private fun ActionCard(text: String, button: String, onClick: () -> Unit) {
 }
 
 private fun RequiredPermission.explain(): String = when (this) {
-    RequiredPermission.WRITE_SYSTEM_SETTINGS -> "Allow Nova to modify system settings to control brightness."
-    RequiredPermission.DO_NOT_DISTURB -> "Allow Do Not Disturb access so Nova can silence the ringer."
-    RequiredPermission.RECORD_AUDIO -> "Nova needs microphone access."
-    RequiredPermission.CAMERA -> "Nova needs camera access."
-    RequiredPermission.ACCESSIBILITY_SERVICE -> "Turn on Nova's accessibility service to control other apps."
-    RequiredPermission.NOTIFICATION_LISTENER -> "Allow notification access so Nova can read notifications."
-    RequiredPermission.USAGE_STATS -> "Allow usage access so Nova can tell which app is open."
-    RequiredPermission.DEVICE_ADMIN -> "Nova needs device admin rights for that."
-    RequiredPermission.READ_CONTACTS -> "Allow contacts access so Nova can find who you mean."
-    RequiredPermission.CALL_PHONE -> "Allow Nova to place calls."
-    RequiredPermission.SEND_SMS -> "Allow Nova to send messages."
+    RequiredPermission.WRITE_SYSTEM_SETTINGS -> "Allow Raza to modify system settings to control brightness."
+    RequiredPermission.DO_NOT_DISTURB -> "Allow Do Not Disturb access so Raza can silence the ringer."
+    RequiredPermission.RECORD_AUDIO -> "Raza needs microphone access."
+    RequiredPermission.CAMERA -> "Raza needs camera access."
+    RequiredPermission.ACCESSIBILITY_SERVICE -> "Turn on Raza's accessibility service to control other apps."
+    RequiredPermission.NOTIFICATION_LISTENER -> "Allow notification access so Raza can read notifications."
+    RequiredPermission.USAGE_STATS -> "Allow usage access so Raza can tell which app is open."
+    RequiredPermission.DEVICE_ADMIN -> "Raza needs device admin rights for that."
+    RequiredPermission.READ_CONTACTS -> "Allow contacts access so Raza can find who you mean."
+    RequiredPermission.CALL_PHONE -> "Allow Raza to place calls."
+    RequiredPermission.SEND_SMS -> "Allow Raza to send messages."
 }

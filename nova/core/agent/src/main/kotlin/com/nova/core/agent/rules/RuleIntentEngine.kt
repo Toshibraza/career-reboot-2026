@@ -338,7 +338,7 @@ class RuleIntentEngine : IntentEngine {
             simpleRule(
                 "identity",
                 "\\bwho are you\\b|\\bwhat(?:s| is) your name\\b",
-                NovaAction.Speak("I'm Nova, your assistant on this phone."),
+                NovaAction.Speak("I'm Raza, your assistant on this phone."),
             ),
 
             // --- Memory ------------------------------------------------------------------

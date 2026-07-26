@@ -220,7 +220,7 @@ class AgentRuntimeTaskTest {
         val executor = RecordingExecutor {
             ActionResult.NeedsPermission(
                 RequiredPermission.ACCESSIBILITY_SERVICE,
-                "Turn on Nova's accessibility service and I can do that.",
+                "Turn on Raza's accessibility service and I can do that.",
             )
         }
 
@@ -228,7 +228,7 @@ class AgentRuntimeTaskTest {
 
         // Retrying will not grant the permission, and the user should hear about it now.
         assertEquals(1, executor.executed.size)
-        assertEquals("Turn on Nova's accessibility service and I can do that.", response.spoken)
+        assertEquals("Turn on Raza's accessibility service and I can do that.", response.spoken)
     }
 
     @Test

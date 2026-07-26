@@ -87,7 +87,9 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
 
                     is SpeechEvent.Final -> {
                         _state.update { it.copy(partial = "", level = 0f) }
-                        submit(event.text)
+                        // Spoken input gets an echo; typed input does not, because the user
+                        // is already looking at exactly what they wrote.
+                        submit(event.text, echo = true)
                     }
 
                     is SpeechEvent.Failed -> _state.update {
@@ -109,12 +111,19 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
         _state.update { it.copy(status = NovaStatus.IDLE, partial = "", level = 0f) }
     }
 
-    /** Runs [utterance] through the agent. Also the entry point for typed commands. */
-    fun submit(utterance: String) {
+    /**
+     * Runs [utterance] through the agent. Also the entry point for typed commands.
+     *
+     * [echo] repeats the command back before acting. Worth the extra second for speech, where
+     * a misheard command is otherwise only discovered by its consequences.
+     */
+    fun submit(utterance: String, echo: Boolean = false) {
         if (utterance.isBlank()) return
 
         viewModelScope.launch {
             _state.update { it.copy(status = NovaStatus.THINKING, message = null, pendingPermission = null) }
+
+            if (echo) container.speaker.speak("You said, $utterance")
 
             val response = container.runtime.handle(utterance)
             val blocked = response.results.firstNotNullOfOrNull { it as? ActionResult.NeedsPermission }

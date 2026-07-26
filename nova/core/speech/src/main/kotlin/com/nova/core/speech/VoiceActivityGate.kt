@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -48,7 +49,10 @@ class VoiceActivityGate(
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
-        if (minBuffer <= 0) return@flow
+        if (minBuffer <= 0) {
+            Log.w(TAG, "AudioRecord reports no usable buffer size; gate cannot run")
+            return@flow
+        }
 
         val bufferSize = maxOf(minBuffer, FRAME_SAMPLES * 2 * 4)
         val recorder = AudioRecord(
@@ -60,6 +64,9 @@ class VoiceActivityGate(
         )
 
         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            // Usually the microphone already being held by something else, which is silent
+            // and indistinguishable from "nobody is speaking" without this.
+            Log.w(TAG, "AudioRecord failed to initialise; another app may hold the microphone")
             recorder.release()
             return@flow
         }
@@ -69,16 +76,32 @@ class VoiceActivityGate(
 
         try {
             recorder.startRecording()
+            Log.i(TAG, "listening for speech onset")
+
+            var peak = 0f
+            var frames = 0
+
             while (true) {
                 coroutineContext.ensureActive()
 
                 val read = recorder.read(frame, 0, frame.size)
                 if (read <= 0) continue
 
-                if (rms(frame, read) >= threshold) {
+                val level = rms(frame, read)
+                peak = maxOf(peak, level)
+
+                // Periodic, because the threshold is the single most likely thing to be wrong
+                // on an unfamiliar microphone, and it is invisible otherwise.
+                if (++frames % LEVEL_LOG_FRAMES == 0) {
+                    Log.i(TAG, "peak level %.4f over last %d frames (threshold %.4f)".format(peak, LEVEL_LOG_FRAMES, threshold))
+                    peak = 0f
+                }
+
+                if (level >= threshold) {
                     loudFrames++
                     if (loudFrames >= framesToTrigger) {
                         loudFrames = 0
+                        Log.i(TAG, "speech detected at level %.4f".format(level))
                         emit(Unit)
                     }
                 } else {
@@ -104,6 +127,11 @@ class VoiceActivityGate(
     }
 
     private companion object {
+        const val TAG = "NovaWake"
+
+        /** About every two seconds at 32 ms a frame — often enough to tune by, rare enough not to flood. */
+        const val LEVEL_LOG_FRAMES = 60
+
         const val SAMPLE_RATE = 16_000
 
         /** 32 ms at 16 kHz — long enough for a stable RMS, short enough to react quickly. */

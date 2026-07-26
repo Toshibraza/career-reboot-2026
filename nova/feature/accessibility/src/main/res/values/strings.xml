@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_service_label">Nova</string>
-    <string name="accessibility_service_description">Lets Nova act on what is on screen — tapping buttons, scrolling, typing, going back, and locking the phone — so spoken commands can reach apps other than Nova itself. Nova reads screen content only while carrying out a command you gave it.</string>
+    <string name="accessibility_service_label">Raza</string>
+    <string name="accessibility_service_description">Lets Raza act on what is on screen — tapping buttons, scrolling, typing, going back, and locking the phone — so spoken commands can reach apps other than Raza itself. Raza reads screen content only while carrying out a command you gave it.</string>
 </resources>

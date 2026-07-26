@@ -3,7 +3,10 @@ package com.nova.core.agent.rules
 /** Text tidying shared by every rule, kept in one place so rules stay readable. */
 internal object Utterance {
 
-    private val WAKE_PREFIX = Regex("^(?:hey |ok |okay )?nova[,\\s]+")
+    // "raza" and near-misses the recogniser produces for it. A name it has never seen comes
+    // back as whatever real word sounds closest, and dropping only the exact spelling would
+    // leave "razor open youtube" unparseable.
+    private val WAKE_PREFIX = Regex("^(?:hey |ok |okay )?(?:raza|razaa|rezza|razor|rasa)[,\\s]+")
     private val POLITENESS = Regex("\\b(?:please|can you|could you|would you|i want you to|i need you to)\\b")
     private val PUNCTUATION = Regex("[^a-z0-9%+\\-\\s]")
     private val WHITESPACE = Regex("\\s+")
