@@ -91,11 +91,26 @@ class TaskPromptTest {
     }
 
     @Test
-    fun `the system prompt never shows pipe-separated values inside json`() {
-        // Regression guard for the above: a small model copies whatever shape it is shown.
+    fun `the system prompt shows pipes only as a labelled mistake`() {
+        // A small model copies whatever shape it is shown, so the pipe form may appear only
+        // where it is explicitly marked wrong. Telling it "choose one word" was not enough on
+        // its own; the WRONG/RIGHT pair is what actually fixed the behaviour on device.
         val system = TaskPrompt.systemPrompt()
-        assertTrue("\"action\":\"open_app|" !in system)
+
         assertTrue("Never write several separated by" in system)
+        assertTrue("WRONG" in system)
+        assertTrue("RIGHT" in system)
+
+        // Every pipe form present must sit after the WRONG marker and before the RIGHT one.
+        val wrongAt = system.indexOf("WRONG")
+        val rightAt = system.indexOf("RIGHT")
+        val pipeAt = system.indexOf("\"action\":\"open_app|")
+
+        assertTrue("the pipe example must be labelled WRONG", pipeAt in (wrongAt + 1) until rightAt)
+        assertTrue(
+            "no second unlabelled pipe example",
+            system.indexOf("\"action\":\"open_app|", pipeAt + 1) < 0,
+        )
     }
 
     @Test
