@@ -14,6 +14,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,6 +51,13 @@ class MainActivity : ComponentActivity() {
                 }
                 var alwaysListening by remember { mutableStateOf(NovaListeningService.isRunning) }
 
+                val apiKeys = (application as NovaApplication).container.apiKeys
+                // Bumped after a save so the masked display refreshes; the key itself is read
+                // per request, so a new one takes effect on the next command without a restart.
+                var apiKeyRevision by remember { mutableIntStateOf(0) }
+                val apiKeyMasked = remember(apiKeyRevision) { apiKeys.masked() }
+                val hasApiKey = remember(apiKeyRevision) { apiKeys.hasKey() }
+
                 val permissionLauncher = rememberPermissionLauncher { granted ->
                     micGranted = granted
                 }
@@ -81,6 +89,8 @@ class MainActivity : ComponentActivity() {
                     micGranted = micGranted,
                     accessibilityEnabled = accessibilityEnabled,
                     alwaysListening = alwaysListening,
+                    apiKeyMasked = apiKeyMasked,
+                    hasApiKey = hasApiKey,
                     onMicTap = viewModel::toggleListening,
                     onSubmit = viewModel::submit,
                     onRequestMic = { permissionLauncher() },
@@ -93,6 +103,14 @@ class MainActivity : ComponentActivity() {
                         } else {
                             NovaListeningService.stop(context)
                         }
+                    },
+                    onSaveApiKey = {
+                        apiKeys.save(it)
+                        apiKeyRevision++
+                    },
+                    onClearApiKey = {
+                        apiKeys.clear()
+                        apiKeyRevision++
                     },
                 )
             }

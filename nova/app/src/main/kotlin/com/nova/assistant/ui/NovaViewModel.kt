@@ -8,6 +8,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.nova.assistant.NovaApplication
 import com.nova.assistant.NovaContainer
 import com.nova.core.agent.ActionResult
+import com.nova.core.agent.AgentResponse
+import com.nova.core.agent.NovaAction
 import com.nova.core.agent.RequiredPermission
 import com.nova.core.speech.SpeechError
 import com.nova.core.speech.SpeechEvent
@@ -25,6 +27,14 @@ data class Turn(
     val heard: String,
     val reply: String,
     val succeeded: Boolean,
+    /**
+     * What a multi-step task actually did, one line per step.
+     *
+     * Empty for ordinary commands. A planner-driven task is otherwise a black box — it taps
+     * around for several seconds and then says one sentence — and when it goes wrong the steps
+     * are the only way to see where.
+     */
+    val steps: List<String> = emptyList(),
 )
 
 data class NovaUiState(
@@ -106,7 +116,12 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
             _state.update {
                 it.copy(
                     status = NovaStatus.SPEAKING,
-                    turns = it.turns + Turn(utterance, response.spoken, response.succeeded),
+                    turns = it.turns + Turn(
+                        heard = utterance,
+                        reply = response.spoken,
+                        succeeded = response.succeeded,
+                        steps = response.describeSteps(),
+                    ),
                     pendingPermission = blocked?.permission,
                 )
             }
@@ -114,6 +129,27 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
             container.speaker.speak(response.spoken)
             _state.update { it.copy(status = NovaStatus.IDLE) }
         }
+    }
+
+    /** Only worth showing when several actions ran — a single command speaks for itself. */
+    private fun AgentResponse.describeSteps(): List<String> {
+        if (plan.actions.size < 2) return emptyList()
+
+        return plan.actions.mapIndexed { index, action ->
+            val outcome = results.getOrNull(index)
+            val mark = if (outcome is ActionResult.Success) "✓" else "✗"
+            "$mark ${action.describe()}"
+        }
+    }
+
+    private fun NovaAction.describe(): String = when (this) {
+        is NovaAction.OpenApp -> "open $query"
+        is NovaAction.TapLabel -> "tap $label"
+        is NovaAction.TypeText -> "type \"$text\""
+        is NovaAction.ScrollScreen -> "scroll ${direction.name.lowercase()}"
+        NovaAction.GoBack -> "back"
+        NovaAction.GoHome -> "home"
+        else -> this::class.simpleName.orEmpty()
     }
 
     fun dismissMessage() = _state.update { it.copy(message = null) }

@@ -46,18 +46,18 @@ class NovaContainer(context: Context) {
     /** Nova's eyes. Swapped for an OCR-backed reader later without touching anything else. */
     val screenReader: ScreenReader by lazy { AccessibilityScreenReader(appContext) }
 
+    val apiKeys: ApiKeyStore by lazy { ApiKeyStore(appContext) }
+
     /**
      * Drives multi-step tasks the rule engine can't parse.
      *
-     * Null without an API key, and the runtime then declines unrecognised commands exactly as
-     * it did before — no crash, no silent degradation, just the Phase 1 answer.
+     * Always constructed, because the key is read per request rather than captured here — a
+     * key pasted into the app takes effect on the next command, with no restart. Without any
+     * key the planner says so plainly instead of the runtime silently declining.
      */
-    private val taskPlanner: TaskPlanner? by lazy {
-        BuildConfig.OPENAI_API_KEY.takeIf { it.isNotBlank() }
-            ?.let { key -> OpenAiTaskPlanner(OpenAiClient(key)) }
+    private val taskPlanner: TaskPlanner by lazy {
+        OpenAiTaskPlanner(OpenAiClient(apiKey = { apiKeys.current() }))
     }
-
-    val hasTaskPlanner: Boolean get() = taskPlanner != null
 
     val runtime: AgentRuntime by lazy {
         AgentRuntime(

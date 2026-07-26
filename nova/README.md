@@ -155,16 +155,25 @@ The guardrails are the interesting part, and each exists for a reason:
 
 ### Enabling the planner
 
-Add an OpenAI key to `nova/local.properties`, which is gitignored:
+Either paste a key into the app — **Multi-step tasks → Set key** — or set a build-time default
+in `nova/local.properties`, which is gitignored:
 
 ```properties
 openai.apiKey=sk-...
 ```
 
-Without it `taskPlanner` is null and Nova declines unrecognised commands exactly as it did in
-Phase 1 — no crash, no silent degradation. Note that this bakes the key into the APK, which is
-fine for a personal build and wrong for a published one; a shipped app should call a backend
-that holds the key.
+A pasted key wins over the build-time one and takes effect on the next command, because the key
+is resolved per request rather than captured at construction. That matters: the build-time key
+is baked into the APK, and the only safe response to a leaked key is to replace it quickly —
+which should be a paste, not a rebuild and reinstall.
+
+The pasted key lives in Nova's private preferences. That keeps it away from other apps but is
+not encrypted at rest, so a rooted device or a backup could reach it. Fine for a personal build;
+a published app should not hold a provider key on the device at all and should call a backend
+that holds it instead.
+
+With no key at all, unrecognised commands answer "I don't have an API key yet" rather than
+failing obscurely.
 
 ### The two seams that matter
 

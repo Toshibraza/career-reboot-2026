@@ -43,6 +43,9 @@ class OpenAiTaskPlanner(
      * network" hid a real problem the first time this ran against the live API.
      */
     private fun Throwable.explain(): String = when {
+        this is MissingApiKeyException ->
+            "I don't have an API key yet. Add one in Nova's settings."
+
         this is OpenAiHttpException && status == 401 ->
             "My API key was rejected."
 

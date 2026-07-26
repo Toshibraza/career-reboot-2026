@@ -35,6 +35,9 @@ class OpenAiHttpException(
     val detail: String,
 ) : IOException("OpenAI returned HTTP $status: $detail")
 
+/** No key is configured, so there is nothing to send. */
+class MissingApiKeyException : IOException("No OpenAI API key configured")
+
 /**
  * Minimal OpenAI chat client over [HttpURLConnection].
  *
@@ -43,7 +46,13 @@ class OpenAiHttpException(
  * when the thing being sent is a description of the user's screen.
  */
 class OpenAiClient(
-    private val apiKey: String,
+    /**
+     * Resolved per call, not captured once.
+     *
+     * The key can change while the app is running — the user pastes a new one after rotating
+     * it — and a client holding a stale copy would keep failing until the process restarted.
+     */
+    private val apiKey: () -> String,
     private val model: String = DEFAULT_MODEL,
     private val endpoint: String = DEFAULT_ENDPOINT,
     private val timeoutMillis: Int = 30_000,
@@ -53,6 +62,9 @@ class OpenAiClient(
 
     override suspend fun complete(system: String, user: String): String =
         withContext(Dispatchers.IO) {
+            val key = apiKey().trim()
+            if (key.isEmpty()) throw MissingApiKeyException()
+
             val body = requestBody(system, user).toString()
             val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -60,7 +72,7 @@ class OpenAiClient(
                 connectTimeout = timeoutMillis
                 readTimeout = timeoutMillis
                 setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("Authorization", "Bearer $apiKey")
+                setRequestProperty("Authorization", "Bearer $key")
             }
 
             try {

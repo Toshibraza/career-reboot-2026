@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -51,12 +52,16 @@ fun NovaScreen(
     micGranted: Boolean,
     accessibilityEnabled: Boolean,
     alwaysListening: Boolean,
+    apiKeyMasked: String,
+    hasApiKey: Boolean,
     onMicTap: () -> Unit,
     onSubmit: (String) -> Unit,
     onRequestMic: () -> Unit,
     onOpenSettingsFor: (RequiredPermission) -> Unit,
     onDismissPermissionPrompt: () -> Unit,
     onAlwaysListeningChange: (Boolean) -> Unit,
+    onSaveApiKey: (String) -> Unit,
+    onClearApiKey: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -99,6 +104,15 @@ fun NovaScreen(
             }
 
             AlwaysListeningRow(alwaysListening, micGranted, onAlwaysListeningChange)
+
+            Spacer(Modifier.height(8.dp))
+
+            ApiKeyRow(
+                masked = apiKeyMasked,
+                hasKey = hasApiKey,
+                onSave = onSaveApiKey,
+                onClear = onClearApiKey,
+            )
 
             Spacer(Modifier.height(12.dp))
 
@@ -171,6 +185,97 @@ private fun AlwaysListeningRow(
     }
 }
 
+/**
+ * Lets the key be replaced without a rebuild.
+ *
+ * Rotating a leaked key should take seconds, and the build-time key is baked into the APK —
+ * so without this, replacing it means editing local.properties, rebuilding and reinstalling.
+ */
+@Composable
+private fun ApiKeyRow(
+    masked: String,
+    hasKey: Boolean,
+    onSave: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    var editing by remember { mutableStateOf(false) }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Multi-step tasks", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = if (hasKey) "OpenAI key $masked" else "Needs an OpenAI key",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = { editing = true }) {
+            Text(if (hasKey) "Change" else "Set key")
+        }
+    }
+
+    if (editing) {
+        ApiKeyDialog(
+            hasKey = hasKey,
+            onDismiss = { editing = false },
+            onSave = {
+                onSave(it)
+                editing = false
+            },
+            onClear = {
+                onClear()
+                editing = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ApiKeyDialog(
+    hasKey: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    var entry by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("OpenAI API key") },
+        text = {
+            Column {
+                Text(
+                    text = "Used only for commands the built-in rules can't handle. " +
+                        "Stored on this device, in Nova's private storage.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = entry,
+                    onValueChange = { entry = it },
+                    placeholder = { Text("sk-...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(entry) }, enabled = entry.isNotBlank()) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            Row {
+                if (hasKey) {
+                    TextButton(onClick = onClear) { Text("Remove") }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+}
+
 @Composable
 private fun Transcript(state: NovaUiState, modifier: Modifier = Modifier) {
     val listState = rememberLazyListState()
@@ -224,6 +329,15 @@ private fun TurnRow(turn: Turn) {
                 MaterialTheme.colorScheme.error
             },
         )
+
+        turn.steps.forEach { step ->
+            Text(
+                text = step,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+        }
     }
 }
 
