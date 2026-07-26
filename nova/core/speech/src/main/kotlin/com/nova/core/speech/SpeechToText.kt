@@ -14,8 +14,14 @@ sealed interface SpeechEvent {
     /** Best guess so far. Shown live but never acted on. */
     data class Partial(val text: String) : SpeechEvent
 
-    /** The recogniser has settled. This is what gets sent to the agent. */
-    data class Final(val text: String) : SpeechEvent
+    /**
+     * The recogniser has settled. [text] is what gets sent to the agent.
+     *
+     * [alternatives] are the runners-up. They matter for wake words: a name the recogniser has
+     * never seen is often not its first guess, and ignoring the rest of the list throws away
+     * the very evidence that the phrase was spoken.
+     */
+    data class Final(val text: String, val alternatives: List<String> = emptyList()) : SpeechEvent
 
     data class Failed(val reason: SpeechError) : SpeechEvent
 }

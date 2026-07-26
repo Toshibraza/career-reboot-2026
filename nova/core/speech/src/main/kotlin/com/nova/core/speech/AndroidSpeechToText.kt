@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -56,10 +57,20 @@ class AndroidSpeechToText(context: Context) : SpeechToText {
 
             override fun onResults(results: Bundle?) {
                 val text = results.firstTranscript()
+
+                // Every alternative, not just the winner. When a name is not recognised the
+                // right one is often second or third, and without seeing the list there is no
+                // way to tell a mishearing from a mis-scoring.
+                val alternatives = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.take(MAX_LOGGED_ALTERNATIVES)
+                    .orEmpty()
+                Log.i(TAG, "heard: $alternatives")
+
                 if (text.isNullOrBlank()) {
                     trySend(SpeechEvent.Failed(SpeechError.NO_MATCH))
                 } else {
-                    trySend(SpeechEvent.Final(text))
+                    trySend(SpeechEvent.Final(text, alternatives.drop(1)))
                 }
                 finished = true
                 close()
@@ -81,7 +92,9 @@ class AndroidSpeechToText(context: Context) : SpeechToText {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            // Several, not one. A name the recogniser does not know is frequently not its top
+            // guess, and the alternatives are what make a fuzzy wake word work at all.
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, MAX_LOGGED_ALTERNATIVES)
             // Ask for on-device recognition where the device supports it; the platform falls
             // back to the network recogniser on its own when it doesn't.
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
@@ -117,5 +130,10 @@ class AndroidSpeechToText(context: Context) : SpeechToText {
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> SpeechError.BUSY
         SpeechRecognizer.ERROR_CLIENT -> SpeechError.BUSY
         else -> SpeechError.UNKNOWN
+    }
+
+    private companion object {
+        const val TAG = "NovaSpeech"
+        const val MAX_LOGGED_ALTERNATIVES = 5
     }
 }

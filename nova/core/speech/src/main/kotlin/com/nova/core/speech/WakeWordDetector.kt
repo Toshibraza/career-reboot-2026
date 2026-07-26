@@ -1,6 +1,7 @@
 package com.nova.core.speech
 
 import android.util.Log
+import com.nova.core.agent.match.FuzzyMatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -43,21 +44,34 @@ class GatedWakeWordDetector(
     private val handoverDelayMillis: Long = 250,
 ) : WakeWordDetector {
 
-    /**
-     * The wake phrase and the near-misses a recogniser produces for it.
-     *
-     * A personal name is not in the recogniser's vocabulary, so it comes back as whatever real
-     * word sounds closest — "razor", "rasa", "raise a". Matching only the exact spelling is why
-     * a wake word appears not to work when it is being heard perfectly well.
-     */
-    private val needle = Regex(
-        "\\b(?:${(listOf(phrase) + HOMOPHONES).joinToString("|") { Regex.escape(it.lowercase()) }})\\b",
-    )
-
     private companion object {
         const val TAG = "NovaWake"
 
-        val HOMOPHONES = listOf("razor", "rasa", "razaa", "rezza", "raiser", "raza's")
+        /**
+         * How close a heard word must be to count as the wake word.
+         *
+         * Below [com.nova.core.agent.match.FuzzyMatcher.MIN_SCORE] on purpose. A personal name
+         * is not in the recogniser's vocabulary, so it never comes back cleanly — "Raza"
+         * arrives as "razor" (score 36) or "rasa" (45), and a threshold tuned for app names
+         * rejects both. Set low enough to accept those, high enough to reject "raise" (24)
+         * and ordinary conversation.
+         */
+        const val WAKE_SCORE = 35
+    }
+
+    /**
+     * Whether [text] contains something close enough to the wake phrase.
+     *
+     * Compared word by word with the same fuzzy scoring used for app names and contacts,
+     * rather than against a hand-written list of spellings. A list only ever covers the
+     * mishearings someone thought of; scoring covers the ones they did not.
+     */
+    private fun containsWakeWord(text: String): Boolean {
+        val target = FuzzyMatcher.normalise(phrase)
+
+        return text.split(Regex("\\W+"))
+            .filter { it.isNotBlank() }
+            .any { word -> FuzzyMatcher.score(FuzzyMatcher.normalise(word), target) >= WAKE_SCORE }
     }
 
     override fun detections(): Flow<Unit> = flow {
@@ -82,19 +96,19 @@ class GatedWakeWordDetector(
         var lastHeard = ""
 
         speechToText.transcribe(languageTag).collect { event ->
-            val text = when (event) {
-                is SpeechEvent.Partial -> event.text
-                is SpeechEvent.Final -> event.text
+            // Every candidate, not just the winner — the wake word is frequently a runner-up.
+            val candidates = when (event) {
+                is SpeechEvent.Partial -> listOf(event.text)
+                is SpeechEvent.Final -> listOf(event.text) + event.alternatives
                 is SpeechEvent.Failed -> {
                     Log.i(TAG, "recogniser gave up: ${event.reason}")
-                    null
+                    emptyList()
                 }
-                else -> null
+                else -> emptyList()
             }
-            if (text != null) lastHeard = text
-            if (!heard && text != null && needle.containsMatchIn(text.lowercase())) {
-                heard = true
-            }
+
+            candidates.firstOrNull()?.let { lastHeard = it }
+            if (!heard && candidates.any(::containsWakeWord)) heard = true
         }
 
         // The single most useful line when the wake word "doesn't work": it usually did hear

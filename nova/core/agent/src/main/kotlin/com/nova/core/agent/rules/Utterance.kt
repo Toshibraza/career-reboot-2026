@@ -1,24 +1,46 @@
 package com.nova.core.agent.rules
 
+import com.nova.core.agent.match.FuzzyMatcher
+
 /** Text tidying shared by every rule, kept in one place so rules stay readable. */
 internal object Utterance {
 
-    // "raza" and near-misses the recogniser produces for it. A name it has never seen comes
-    // back as whatever real word sounds closest, and dropping only the exact spelling would
-    // leave "razor open youtube" unparseable.
-    private val WAKE_PREFIX = Regex("^(?:hey |ok |okay )?(?:raza|razaa|rezza|razor|rasa)[,\\s]+")
+    private val GREETING = Regex("^(?:hey|ok|okay|hi)\\s+")
     private val POLITENESS = Regex("\\b(?:please|can you|could you|would you|i want you to|i need you to)\\b")
     private val PUNCTUATION = Regex("[^a-z0-9%+\\-\\s]")
     private val WHITESPACE = Regex("\\s+")
 
     /** Lowercases, drops the wake word, filler and punctuation, and collapses whitespace. */
-    fun normalise(raw: String): String = raw
+    fun normalise(raw: String, wakeWord: String = DEFAULT_WAKE_WORD): String = raw
         .lowercase()
-        .replace(WAKE_PREFIX, "")
+        .replace(GREETING, "")
+        .dropWakeWord(wakeWord)
         .replace(POLITENESS, " ")
         .replace(PUNCTUATION, " ")
         .replace(WHITESPACE, " ")
         .trim()
+
+    /**
+     * Removes a leading wake word, however the recogniser spelled it.
+     *
+     * Scored rather than matched against a list, for the same reason the detector is: "Raza"
+     * comes back as "razor" or "rasa", and a command that was recognised but not stripped is
+     * just as broken as one that was never heard — "razor open youtube" would try to launch an
+     * app called "razor open youtube".
+     */
+    private fun String.dropWakeWord(wakeWord: String): String {
+        val words = trim().split(' ')
+        val first = words.firstOrNull()?.filter(Char::isLetterOrDigit).orEmpty()
+        if (first.isEmpty()) return this
+
+        val score = FuzzyMatcher.score(first, FuzzyMatcher.normalise(wakeWord))
+        return if (score >= WAKE_SCORE) words.drop(1).joinToString(" ") else this
+    }
+
+    /** Matches the detector's threshold — see `GatedWakeWordDetector`. */
+    private const val WAKE_SCORE = 35
+
+    private const val DEFAULT_WAKE_WORD = "raza"
 }
 
 /** Spoken numbers, because speech recognisers emit "fifty" as often as "50". */
