@@ -80,6 +80,43 @@ class TaskPromptTest {
     }
 
     @Test
+    fun `an echoed enum placeholder blocks rather than acting`() {
+        // Verbatim from Qwen2.5-0.5B on device. The first prompt listed allowed values inside
+        // the JSON template as "open_app|tap|type|...", and the model copied the placeholder
+        // instead of choosing. It must never be read as a real action.
+        val decision = TaskPrompt.parse(
+            """{"decision":"act","action":"open_app|tap|type|scroll_up|home|back|none","argument":"","message":"Navigating...","rationale":""}""",
+        )
+        assertTrue(decision is PlannerDecision.Blocked)
+    }
+
+    @Test
+    fun `the system prompt never shows pipe-separated values inside json`() {
+        // Regression guard for the above: a small model copies whatever shape it is shown.
+        val system = TaskPrompt.systemPrompt()
+        assertTrue("\"action\":\"open_app|" !in system)
+        assertTrue("Never write several separated by" in system)
+    }
+
+    @Test
+    fun `prose around the json is tolerated`() {
+        // Small models wrap replies in explanation or a code fence; the answer inside is still
+        // correct and rejecting it would make the model look broken.
+        val decision = TaskPrompt.parse(
+            """
+            Sure! Here is the next step:
+            ```json
+            {"decision":"act","action":"open_app","argument":"Settings","message":"","rationale":"need the app"}
+            ```
+            """.trimIndent(),
+        )
+        assertEquals(
+            PlannerDecision.Act(NovaAction.OpenApp("Settings"), "need the app"),
+            decision,
+        )
+    }
+
+    @Test
     fun `an unknown decision blocks`() {
         val decision = TaskPrompt.parse(
             """{"decision":"improvise","action":"tap","argument":"OK","message":"","rationale":""}""",

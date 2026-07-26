@@ -78,10 +78,22 @@ object TaskPrompt {
           changing account settings) unless the user's goal explicitly asked for it.
         - Keep "message" short enough to speak aloud.
 
-        Reply with one JSON object and nothing else:
-        {"decision":"act|finish|blocked","action":"open_app|tap|type|scroll_down|scroll_up|back|home|none","argument":"","message":"","rationale":""}
+        Reply with one JSON object and nothing else, with exactly these five fields:
+        decision, action, argument, message, rationale.
 
-        Examples:
+        "decision" must be exactly one of these words: act, finish, blocked
+        "action" must be exactly one of these words: open_app, tap, type, scroll_down,
+        scroll_up, back, home, none
+
+        Choose one word. Never write several separated by "|".
+
+        WRONG — never copy the list of choices:
+        {"decision":"act","action":"open_app|tap|type|back|none","argument":"","message":"","rationale":""}
+
+        RIGHT — one word only:
+        {"decision":"act","action":"open_app","argument":"Settings","message":"","rationale":"need the app"}
+
+        More examples:
         {"decision":"act","action":"open_app","argument":"WhatsApp","message":"","rationale":"need the app first"}
         {"decision":"act","action":"tap","argument":"Send","message":"","rationale":"send the message"}
         {"decision":"finish","action":"none","argument":"","message":"Sent it.","rationale":""}

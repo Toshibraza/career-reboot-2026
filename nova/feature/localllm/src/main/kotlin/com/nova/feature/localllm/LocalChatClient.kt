@@ -45,6 +45,12 @@ class LocalChatClient(
                 val inference = engine ?: load()
                 val prompt = "$system\n\n$user\n\nJSON:"
 
+                // Whether the planner could see the screen decides whether a repeated action
+                // is the model ignoring feedback or the model never receiving any. Logs the
+                // fact, not the screen contents.
+                val sawScreen = "(cannot read the screen)" !in user
+                Log.i(TAG, "prompt ${prompt.length} chars, screen visible: $sawScreen")
+
                 var reply: String
                 val elapsed = measureTimeMillis {
                     reply = runCatching { inference.generateResponse(prompt) }
@@ -58,10 +64,12 @@ class LocalChatClient(
                         }
                 }
 
-                // Logged because throughput is the whole question with on-device inference,
-                // and guessing at it from feel is how people end up shipping something
-                // unusable.
+                // Throughput is the whole question with on-device inference, and guessing at
+                // it from feel is how people ship something unusable. The reply itself is
+                // logged too: a small model's failures are almost always in what it wrote,
+                // and without seeing that, a bad answer is indistinguishable from a bug.
                 Log.i(TAG, "generated ${reply.length} chars in ${elapsed}ms")
+                Log.i(TAG, "reply: ${reply.replace('\n', ' ').take(MAX_LOGGED_REPLY)}")
                 reply
             }
         }
@@ -113,5 +121,8 @@ class LocalChatClient(
          * object back.
          */
         const val DEFAULT_MAX_TOKENS = 1024
+
+        /** Enough to see the shape of a bad reply without flooding the log. */
+        const val MAX_LOGGED_REPLY = 600
     }
 }

@@ -30,24 +30,25 @@ class NovaCommandReceiver : BroadcastReceiver() {
         val command = intent.getStringExtra(EXTRA_COMMAND)?.takeIf { it.isNotBlank() } ?: return
         val container = (context.applicationContext as NovaApplication).container
 
-        // goAsync keeps the process alive past onReceive; without it the agent would be killed
-        // mid-command. Accessibility work has to run on the main thread.
-        val pending = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
-            try {
-                val response = container.runtime.handle(command)
-                // Nova's answer is otherwise only spoken, which is invisible to adb. Without
-                // this, a command that quietly declined looks identical to one that worked.
-                Log.i(TAG, "\"$command\" -> ${response.plan.actions} -> ${response.spoken}")
-                container.speaker.speak(response.spoken)
-            } finally {
-                pending.finish()
-            }
+        // Released immediately rather than held for the duration. A broadcast has a hard
+        // completion deadline, and an on-device planning loop can run well past it — eight
+        // steps at fourteen seconds each ANR'd the receiver outright. The work continues on a
+        // scope tied to the application instead, which has no such limit and matches how the
+        // real voice path runs it.
+        scope.launch {
+            val response = container.runtime.handle(command)
+            // Nova's answer is otherwise only spoken, which is invisible to adb. Without this,
+            // a command that quietly declined looks identical to one that worked.
+            Log.i(TAG, "\"$command\" -> ${response.plan.actions} -> ${response.spoken}")
+            container.speaker.speak(response.spoken)
         }
     }
 
     private companion object {
         const val EXTRA_COMMAND = "command"
         const val TAG = "NovaCommand"
+
+        /** Outlives any single broadcast. Accessibility work has to run on the main thread. */
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }
 }

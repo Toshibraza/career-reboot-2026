@@ -189,14 +189,40 @@ resident alongside the KV cache and runtime, so budget roughly 1.5× the file si
 
 Qwen is Apache-2.0 and ungated. Gemma needs you to accept its terms on Hugging Face first.
 
-#### What to expect
+#### Measured on this device
 
-Snapdragon 678 has no usable NPU, so this is CPU inference. A planning step is seconds, not
-milliseconds, and the observe-act loop can take several of those steps. The honest trade is
-privacy and working offline, in exchange for speed. `LocalChatClient` logs generation time to
-`NovaLocalLlm` precisely so this can be measured rather than guessed at.
+Qwen2.5-0.5B-Instruct q8, Snapdragon 678, CPU inference:
+
+| | |
+| --- | --- |
+| Model load | ~15 s (once per process) |
+| Per planning step | ~14 s for a ~150 character reply |
+| A full 8-step loop | ~2 minutes |
+
+**It runs, and it cannot plan.** Given the goal "open settings and search for bluetooth", with
+the screen visible on every step and its own history accumulating in the prompt, it chose
+`open_app Settings` eight times in a row and never progressed. Verified it was not a plumbing
+fault: `screen visible: true` on every call, prompt growing 2736 → 3039 characters as history
+built up. The model receives the feedback and cannot use it.
+
+Two prompt bugs were found and fixed on the way, both worth knowing if you swap the model:
+
+- Listing allowed values as `"action":"open_app|tap|type|..."` inside the JSON template made it
+  copy the placeholder verbatim. Allowed values now appear as prose, not inside the template.
+- A rule alone ("choose one word") did not work; an explicit **WRONG/RIGHT** example pair did.
+  Small models imitate shape far more reliably than they follow instructions.
+
+So on this hardware the useful split is: **rules handle the daily commands offline and
+instantly**, and multi-step planning needs either a stronger local model or the API.
+`Gemma3-1B-IT` is the obvious next thing to try — noticeably better at instruction-following and
+it fits in memory — but it is gated, so it needs a Hugging Face token and accepting Google's
+licence.
 
 The MediaPipe native libraries take the APK from about 18 MB to about 66 MB.
+
+What did work exactly as designed: the step cap stopped the loop at 8 rather than letting it tap
+forever, the malformed-reply guard refused to invent an action, and the failure was reported
+plainly instead of silently doing nothing.
 
 ### Enabling the API planner
 
