@@ -176,6 +176,31 @@ class RuleIntentEngineTest {
         assertEquals(NovaAction.OpenApp("press reader"), parse("open press reader"))
     }
 
+    // --- Chained commands --------------------------------------------------------------
+
+    @Test
+    fun `chained commands decline so the planner gets them`() = runTest {
+        // Without this, the app name becomes "whatsapp and message amit".
+        listOf(
+            "open whatsapp and message amit",
+            "open chrome and search for flights",
+            "tap send and then close the app",
+        ).forEach { utterance ->
+            val plan = engine.plan(utterance, AgentContext())
+            assertTrue(
+                "expected '$utterance' to decline",
+                plan.actions.single() is NovaAction.Unsupported,
+            )
+        }
+    }
+
+    @Test
+    fun `app names containing and still resolve`() {
+        // A bare "and" guard would wrongly reject these.
+        assertEquals(NovaAction.OpenApp("black and white"), parse("open black and white"))
+        assertEquals(NovaAction.OpenApp("sound and vibration"), parse("open sound and vibration"))
+    }
+
     // --- Fallback ----------------------------------------------------------------------
 
     @Test

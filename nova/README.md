@@ -101,6 +101,7 @@ Four modules, split so that each capability can be replaced without touching the
 | Module | Type | Contains |
 | --- | --- | --- |
 | `:core:agent` | **pure JVM** | Actions, plans, `IntentEngine`, `ActionExecutor`, `AgentRuntime`, the rule engine, `FuzzyMatcher` |
+| `:core:llm` | **pure JVM** | `TaskPrompt`, `OpenAiClient`, `OpenAiTaskPlanner` |
 | `:core:speech` | Android lib | `SpeechToText`, `Speaker`, `WakeWordDetector` + platform implementations |
 | `:feature:device` | Android lib | `AppRegistry`, `DeviceController`, `DeviceActionExecutor` |
 | `:feature:accessibility` | Android lib | `NovaAccessibilityService`, `ScreenNodes`, `AccessibilityActionExecutor` |
@@ -124,6 +125,46 @@ Two decisions worth knowing:
   context. The rule engine never calls it, so "open YouTube" reads nothing.
 - **`toPrompt()` drops coordinates.** A planner should name the control it wants pressed, not a
   pixel — that keeps taps label-based, auditable, and resilient to layout changes.
+
+### Multi-step tasks
+
+Anything the rule engine can't parse escalates to a `TaskPlanner`, which drives an **observe-act
+loop**: read the screen, choose one action, execute it, look again. One step at a time, never a
+batch — after a tap the screen is different, and further steps planned against the old screen
+would be guesses. Sending a message means tapping a contact, waiting for a screen that did not
+exist when planning started, typing, then finding a send button whose label you could not have
+known in advance.
+
+`OpenAiTaskPlanner` implements it. `TaskPrompt` — the prompt wording and the reply mapping, which
+is the part most likely to be wrong — is pure Kotlin in `:core:llm` and fully unit-tested with no
+network.
+
+The guardrails are the interesting part, and each exists for a reason:
+
+- **A step cap (8).** A planner that misreads a screen would otherwise tap forever, and every
+  step is a real touch on someone's phone.
+- **A malformed reply blocks, it never guesses.** Unparseable JSON, an unknown action, or an
+  action missing its argument all become "I can't do that" rather than a random tap.
+- **A missing permission ends the run immediately.** Retrying will not grant it, and the user
+  should hear about it now rather than after eight wasted steps.
+- **The planner may only tap labels that appear in the screen listing**, and is told not to take
+  destructive or irreversible actions unless the goal explicitly asked for one.
+- **Rules decline chained commands** so they escalate. Without that, "open whatsapp and message
+  Amit" is read as a request to launch an app named "whatsapp and message amit". The guard keys
+  on a verb after "and", so real names like "Sound and vibration" still resolve.
+
+### Enabling the planner
+
+Add an OpenAI key to `nova/local.properties`, which is gitignored:
+
+```properties
+openai.apiKey=sk-...
+```
+
+Without it `taskPlanner` is null and Nova declines unrecognised commands exactly as it did in
+Phase 1 — no crash, no silent degradation. Note that this bakes the key into the APK, which is
+fine for a personal build and wrong for a published one; a shipped app should call a backend
+that holds the key.
 
 ### The two seams that matter
 

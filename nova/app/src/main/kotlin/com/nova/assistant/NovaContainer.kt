@@ -5,6 +5,9 @@ import com.nova.core.agent.AgentContext
 import com.nova.core.agent.AgentRuntime
 import com.nova.core.agent.SpeakActionExecutor
 import com.nova.core.agent.rules.RuleIntentEngine
+import com.nova.core.agent.task.TaskPlanner
+import com.nova.core.llm.OpenAiClient
+import com.nova.core.llm.OpenAiTaskPlanner
 import com.nova.core.speech.AndroidSpeaker
 import com.nova.core.speech.AndroidSpeechToText
 import com.nova.core.speech.Speaker
@@ -43,8 +46,22 @@ class NovaContainer(context: Context) {
     /** Nova's eyes. Swapped for an OCR-backed reader later without touching anything else. */
     val screenReader: ScreenReader by lazy { AccessibilityScreenReader(appContext) }
 
+    /**
+     * Drives multi-step tasks the rule engine can't parse.
+     *
+     * Null without an API key, and the runtime then declines unrecognised commands exactly as
+     * it did before — no crash, no silent degradation, just the Phase 1 answer.
+     */
+    private val taskPlanner: TaskPlanner? by lazy {
+        BuildConfig.OPENAI_API_KEY.takeIf { it.isNotBlank() }
+            ?.let { key -> OpenAiTaskPlanner(OpenAiClient(key)) }
+    }
+
+    val hasTaskPlanner: Boolean get() = taskPlanner != null
+
     val runtime: AgentRuntime by lazy {
         AgentRuntime(
+            taskPlanner = taskPlanner,
             intentEngine = RuleIntentEngine(),
             // Every action has exactly one owner, so this order is documentation rather than
             // precedence: device does what a plain app can, accessibility does what needs to

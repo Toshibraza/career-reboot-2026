@@ -46,6 +46,19 @@ class RuleIntentEngine : IntentEngine {
          */
         const val NOT_A_LAUNCH = "^(?!(?:open|launch|start|run|switch to)\\b)"
 
+        /**
+         * A second instruction bolted onto the first.
+         *
+         * "open whatsapp and message amit" would otherwise be read as a request to launch an
+         * app named "whatsapp and message amit". Single-command rules decline these so the
+         * task planner gets them — and when no planner is configured, saying "I can't do that
+         * yet" beats silently doing half the job.
+         *
+         * The verb list matters: bare "and" would wrongly reject real names like
+         * "Black and White" or "Sound and vibration".
+         */
+        const val CHAINED = "\\band (?:then )?(?:send|message|text|type|write|tap|click|press|search|play|call|reply|share|delete|turn|set|open|close)\\b"
+
         val RULES: List<CommandRule> = listOf(
 
             // --- Torch -------------------------------------------------------------------
@@ -143,6 +156,7 @@ class RuleIntentEngine : IntentEngine {
             },
 
             rule("tap", "^(?:tap|click|press|select|touch|hit)\\s+(?:on\\s+)?(?:the\\s+)?(.+?)(?:\\s+button)?$") {
+                if (it.contains(CHAINED)) return@rule null
                 it.group(1).takeIf(String::isNotBlank)?.let { label ->
                     listOf(NovaAction.TapLabel(label))
                 }
@@ -160,6 +174,7 @@ class RuleIntentEngine : IntentEngine {
             },
 
             rule("open-app", "^(?:open|launch|start|run|go to|switch to)\\s+(?:the\\s+)?(.+?)(?:\\s+app)?$") {
+                if (it.contains(CHAINED)) return@rule null
                 it.group(1).takeIf(String::isNotBlank)?.let { app -> listOf(NovaAction.OpenApp(app)) }
             },
 

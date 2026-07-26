@@ -25,5 +25,6 @@ rootProject.name = "Nova"
 include(":app")
 include(":core:agent")
 include(":core:speech")
+include(":core:llm")
 include(":feature:device")
 include(":feature:accessibility")
