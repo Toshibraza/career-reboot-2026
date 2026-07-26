@@ -45,6 +45,17 @@ sealed interface NovaAction {
     /** Describe what is currently on screen out loud. */
     data object ReadScreen : NovaAction
 
+    /** Store a fact so it can be asked for later. */
+    data class Remember(val subject: String, val detail: String) : NovaAction
+
+    /** Answer a question from what has been stored. */
+    data class Recall(val subject: String) : NovaAction
+
+    /** List everything Nova is holding. */
+    data object RecallAll : NovaAction
+
+    data class ForgetMemory(val subject: String) : NovaAction
+
     data class SetFlashlight(val on: Boolean) : NovaAction
 
     data class SetVolume(val stream: VolumeStream, val level: LevelChange) : NovaAction

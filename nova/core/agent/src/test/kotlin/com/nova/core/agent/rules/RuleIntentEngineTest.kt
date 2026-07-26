@@ -201,6 +201,57 @@ class RuleIntentEngineTest {
         assertEquals(NovaAction.OpenApp("sound and vibration"), parse("open sound and vibration"))
     }
 
+    // --- Memory ------------------------------------------------------------------------
+
+    @Test
+    fun `remembers a subject and a fact`() {
+        assertEquals(
+            NovaAction.Remember("my parking spot", "B2"),
+            parse("remember my parking spot is B2"),
+        )
+        assertEquals(
+            NovaAction.Remember("Amit", "my brother"),
+            parse("remember that Amit is my brother"),
+        )
+    }
+
+    @Test
+    fun `stored detail keeps its casing`() {
+        // A door code or password is worthless once it has been lowercased.
+        assertEquals(
+            NovaAction.Remember("the gate code", "4B7x"),
+            parse("remember the gate code is 4B7x"),
+        )
+    }
+
+    @Test
+    fun `a reminder is not filed as a fact`() = runTest {
+        // "Remember to buy milk" is about when, not what. Storing it as a fact would lose the
+        // part that matters, so it declines and escalates instead.
+        val plan = engine.plan("remember to buy milk", AgentContext())
+        assertTrue(plan.actions.single() is NovaAction.Unsupported)
+    }
+
+    @Test
+    fun `recalls by subject`() {
+        assertEquals(NovaAction.Recall("parking spot"), parse("where is my parking spot"))
+        assertEquals(NovaAction.Recall("gate code"), parse("what is the gate code"))
+        assertEquals(NovaAction.RecallAll, parse("what do you remember"))
+    }
+
+    @Test
+    fun `forgets by subject`() {
+        assertEquals(NovaAction.ForgetMemory("parking spot"), parse("forget my parking spot"))
+    }
+
+    @Test
+    fun `memory rules do not shadow existing commands`() {
+        // These all start with question words or would otherwise be caught by the recall
+        // pattern, and each must keep its original meaning.
+        assertEquals(NovaAction.ReadScreen, parse("what is on screen"))
+        assertEquals(NovaAction.Speak("I'm Nova, your assistant on this phone."), parse("who are you"))
+    }
+
     // --- Fallback ----------------------------------------------------------------------
 
     @Test

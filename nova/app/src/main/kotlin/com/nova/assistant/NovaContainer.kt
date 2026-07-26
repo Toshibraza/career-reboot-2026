@@ -17,7 +17,10 @@ import com.nova.core.speech.Speaker
 import com.nova.core.speech.SpeechToText
 import com.nova.core.speech.GatedWakeWordDetector
 import com.nova.core.speech.WakeWordDetector
+import com.nova.core.agent.memory.Memory
 import com.nova.core.agent.screen.ScreenReader
+import com.nova.feature.memory.MemoryActionExecutor
+import com.nova.feature.memory.SqliteMemory
 import com.nova.feature.accessibility.AccessibilityActionExecutor
 import com.nova.feature.accessibility.AccessibilityScreenReader
 import com.nova.feature.device.AppRegistry
@@ -53,6 +56,9 @@ class NovaContainer(context: Context) {
 
     /** Nova's eyes. Swapped for an OCR-backed reader later without touching anything else. */
     val screenReader: ScreenReader by lazy { AccessibilityScreenReader(appContext) }
+
+    /** Everything Nova has been told to remember. Local, and never leaves the device. */
+    val memory: Memory by lazy { SqliteMemory(appContext) }
 
     val apiKeys: ApiKeyStore by lazy { ApiKeyStore(appContext) }
 
@@ -100,6 +106,7 @@ class NovaContainer(context: Context) {
             executors = listOf(
                 DeviceActionExecutor(deviceController, appRegistry),
                 AccessibilityActionExecutor(screenReader),
+                MemoryActionExecutor(memory),
                 SpeakActionExecutor(),
             ),
             contextProvider = {

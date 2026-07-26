@@ -190,7 +190,60 @@ class RuleIntentEngine : IntentEngine {
                 "\\bwho are you\\b|\\bwhat(?:s| is) your name\\b",
                 NovaAction.Speak("I'm Nova, your assistant on this phone."),
             ),
+
+            // --- Memory ------------------------------------------------------------------
+            // Registered last so nothing else is shadowed: "what is on screen" stays a screen
+            // read and "who are you" stays an introduction, rather than becoming lookups.
+            rule("remember", "^remember\\b") {
+                val said = it.rawAfter("remember")?.removePrefix("that ")?.trim()
+                    ?: return@rule null
+
+                // Requires a subject and a fact. "Remember to buy milk" is a reminder, which
+                // is a different feature with a different lifetime, and quietly filing it as
+                // a fact would lose the part that matters — when.
+                val (subject, detail) = said.splitSubjectAndDetail() ?: return@rule null
+                listOf(NovaAction.Remember(subject, detail))
+            },
+
+            simpleRule(
+                "recall-all",
+                "^what do you remember\\b|^what have you remembered\\b|^list your memor(?:y|ies)$",
+                NovaAction.RecallAll,
+            ),
+
+            rule("forget", "^forget (?:about )?(?:my |the |our )?(.+)$") {
+                it.group(1).takeIf(String::isNotBlank)
+                    ?.let { subject -> listOf(NovaAction.ForgetMemory(subject)) }
+            },
+
+            rule(
+                "recall",
+                "^(?:what|where|when|who|which)(?:s| is| was| are| were)? (?:my |the |our )?(.+)$",
+            ) {
+                it.group(1).takeIf(String::isNotBlank)
+                    ?.let { subject -> listOf(NovaAction.Recall(subject)) }
+            },
         )
+
+        /**
+         * Splits "my parking spot is B2" into a subject and a fact.
+         *
+         * Works on the raw utterance so casing and punctuation survive — a door code or a
+         * password is worthless once it has been lowercased and stripped.
+         */
+        fun String.splitSubjectAndDetail(): Pair<String, String>? {
+            val separator = SUBJECT_SEPARATORS.firstNotNullOfOrNull { candidate ->
+                indexOf(candidate, ignoreCase = true).takeIf { it > 0 }?.let { it to candidate }
+            } ?: return null
+
+            val (at, token) = separator
+            val subject = substring(0, at).trim().removePrefix("that ").trim()
+            val detail = substring(at + token.length).trim()
+
+            return if (subject.isEmpty() || detail.isEmpty()) null else subject to detail
+        }
+
+        val SUBJECT_SEPARATORS = listOf(" is ", " are ", " was ", " were ", ": ")
 
         /** Picks the audio stream named in the utterance, defaulting to media. */
         fun streamIn(text: String): VolumeStream = when {

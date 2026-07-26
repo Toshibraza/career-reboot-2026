@@ -105,6 +105,8 @@ Four modules, split so that each capability can be replaced without touching the
 | `:core:speech` | Android lib | `SpeechToText`, `Speaker`, `WakeWordDetector` + platform implementations |
 | `:feature:device` | Android lib | `AppRegistry`, `DeviceController`, `DeviceActionExecutor` |
 | `:feature:accessibility` | Android lib | `NovaAccessibilityService`, `ScreenNodes`, `AccessibilityActionExecutor` |
+| `:feature:memory` | Android lib | `SqliteMemory`, `MemoryActionExecutor` |
+| `:feature:localllm` | Android lib | `LocalChatClient`, `LocalModelStore` |
 | `:app` | Android app | Compose UI, ViewModel, foreground service, composition root |
 
 `:core:agent` has no Android dependency at all. That is what makes the rule engine testable in
@@ -125,6 +127,30 @@ Two decisions worth knowing:
   context. The rule engine never calls it, so "open YouTube" reads nothing.
 - **`toPrompt()` drops coordinates.** A planner should name the control it wants pressed, not a
   pixel — that keeps taps label-based, auditable, and resilient to layout changes.
+
+### Memory
+
+"Remember my parking spot is B2" → "where is my parking spot". Stored in SQLite on the device,
+answered with no model and no network.
+
+Recall reuses `FuzzyMatcher` — the same scoring that resolves "whats app" to an installed app
+resolves "parking spot" to "my parking spot". Asking about something is the same shape of
+problem as naming an app, and it should not have a second, subtly different implementation.
+
+Three decisions:
+
+- **A new value replaces the old one.** Being told a new parking spot means the previous one is
+  wrong, not that there are now two of them.
+- **An unmatched question says so.** Reading out the nearest unrelated fact is worse than
+  admitting nothing matched — this table holds things the user cannot get back.
+- **Memory is never added to an LLM prompt automatically.** It is exactly the place a gate code
+  or a door PIN ends up, and quietly shipping all of it to an API on every unrecognised command
+  would be indefensible. If a task genuinely needs a stored fact, that should be an explicit
+  recall step whose result enters the history, not a blanket disclosure.
+
+`remember X is Y` is the supported shape. "Remember to buy milk" is a reminder — it is about
+*when*, not *what* — so it declines rather than filing it as a fact and losing the part that
+matters.
 
 ### Multi-step tasks
 
