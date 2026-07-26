@@ -23,6 +23,19 @@ interface ChatClient {
 }
 
 /**
+ * The request reached the API and came back an error.
+ *
+ * Distinct from a plain [IOException] on purpose: "your key is wrong" and "the phone has no
+ * signal" need different answers, and collapsing both into "couldn't reach the network" makes
+ * the real problem undiagnosable — which is exactly what happened the first time this ran.
+ */
+class OpenAiHttpException(
+    val status: Int,
+    /** API error text. Never contains the key; safe to log. */
+    val detail: String,
+) : IOException("OpenAI returned HTTP $status: $detail")
+
+/**
  * Minimal OpenAI chat client over [HttpURLConnection].
  *
  * Hand-rolled rather than pulling in an SDK: this makes exactly one kind of request, and a
@@ -55,9 +68,11 @@ class OpenAiClient(
 
                 val status = connection.responseCode
                 if (status !in 200..299) {
-                    // Deliberately does not include the response body: error payloads can echo
-                    // request content, and this message may end up in a log.
-                    throw IOException("OpenAI request failed with HTTP $status")
+                    val error = connection.errorStream
+                        ?.bufferedReader()
+                        ?.use { it.readText() }
+                        .orEmpty()
+                    throw OpenAiHttpException(status, error.take(MAX_ERROR_DETAIL))
                 }
 
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
@@ -116,5 +131,8 @@ class OpenAiClient(
 
         /** Cheap and quick, which matters when a single task makes up to eight calls. */
         const val DEFAULT_MODEL = "gpt-4o-mini"
+
+        /** Enough of the API error to diagnose, short enough not to flood a log. */
+        private const val MAX_ERROR_DETAIL = 400
     }
 }
