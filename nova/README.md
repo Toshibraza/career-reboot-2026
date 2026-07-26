@@ -153,7 +153,52 @@ The guardrails are the interesting part, and each exists for a reason:
   Amit" is read as a request to launch an app named "whatsapp and message amit". The guard keys
   on a verb after "and", so real names like "Sound and vibration" still resolve.
 
-### Enabling the planner
+### Running the planner on the phone
+
+`ChatClient` has two implementations. `LocalChatClient` runs a quantised model through
+MediaPipe's LLM Inference API with no network; `OpenAiClient` calls the API. `NovaContainer`
+picks per request: **if a model file is installed, the on-device model is used**, otherwise the
+API.
+
+A local failure deliberately does **not** fall back to the cloud. Someone who put a model on
+their phone did it so their screen contents stay on their phone — quietly posting that screen to
+an API because the local model ran out of memory would betray exactly the choice they made.
+
+#### Installing a model
+
+The model is not bundled: it is hundreds of megabytes, and the good ones carry licences a person
+has to accept. Side-load it instead:
+
+```bash
+adb push model.task /sdcard/Android/data/com.nova.assistant/files/llm/model.task
+```
+
+The row under **Multi-step tasks** then reads "On-device model, N MB — private, no network".
+
+#### Choosing a model for the device you have
+
+Sizing must come from **free** memory, not total. This Redmi Note 10 reports 5.7 GB total and
+routinely has under 2 GB available; the loader only cares about the latter. Weights have to be
+resident alongside the KV cache and runtime, so budget roughly 1.5× the file size.
+
+| Model (LiteRT `.task`, q8) | File | Needs free | Fits this device? |
+| --- | --- | --- | --- |
+| Qwen2.5-0.5B-Instruct | 521 MB | ~780 MB | **Yes** |
+| Qwen2.5-1.5B-Instruct | 1524 MB | ~2.3 GB | No |
+| Gemma3-1B-IT | — | — | Gated: needs a Hugging Face token and accepting Google's licence |
+
+Qwen is Apache-2.0 and ungated. Gemma needs you to accept its terms on Hugging Face first.
+
+#### What to expect
+
+Snapdragon 678 has no usable NPU, so this is CPU inference. A planning step is seconds, not
+milliseconds, and the observe-act loop can take several of those steps. The honest trade is
+privacy and working offline, in exchange for speed. `LocalChatClient` logs generation time to
+`NovaLocalLlm` precisely so this can be measured rather than guessed at.
+
+The MediaPipe native libraries take the APK from about 18 MB to about 66 MB.
+
+### Enabling the API planner
 
 Either paste a key into the app — **Multi-step tasks → Set key** — or set a build-time default
 in `nova/local.properties`, which is gitignored:

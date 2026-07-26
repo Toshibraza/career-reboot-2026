@@ -52,7 +52,8 @@ fun NovaScreen(
     micGranted: Boolean,
     accessibilityEnabled: Boolean,
     alwaysListening: Boolean,
-    apiKeyMasked: String,
+    /** Where multi-step planning is running: on-device model, API key, or nothing yet. */
+    plannerSummary: String,
     hasApiKey: Boolean,
     onMicTap: () -> Unit,
     onSubmit: (String) -> Unit,
@@ -112,8 +113,8 @@ fun NovaScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            ApiKeyRow(
-                masked = apiKeyMasked,
+            PlannerRow(
+                summary = plannerSummary,
                 hasKey = hasApiKey,
                 onSave = onSaveApiKey,
                 onClear = onClearApiKey,
@@ -222,8 +223,8 @@ private fun AlwaysListeningRow(
  * so without this, replacing it means editing local.properties, rebuilding and reinstalling.
  */
 @Composable
-private fun ApiKeyRow(
-    masked: String,
+private fun PlannerRow(
+    summary: String,
     hasKey: Boolean,
     onSave: (String) -> Unit,
     onClear: () -> Unit,
@@ -234,7 +235,7 @@ private fun ApiKeyRow(
         Column(Modifier.weight(1f)) {
             Text("Multi-step tasks", style = MaterialTheme.typography.bodyLarge)
             Text(
-                text = if (hasKey) "OpenAI key $masked" else "Needs an OpenAI key",
+                text = summary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

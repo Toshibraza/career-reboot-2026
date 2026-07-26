@@ -24,6 +24,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nova.feature.accessibility.NovaAccessibilityService
+import com.nova.feature.localllm.LocalModelStore
+import com.nova.feature.localllm.ModelStatus
 import com.nova.assistant.ui.NovaScreen
 import com.nova.assistant.ui.NovaViewModel
 import com.nova.assistant.ui.theme.NovaTheme
@@ -66,13 +68,21 @@ class MainActivity : ComponentActivity() {
                 val boundService by NovaAccessibilityService.connection.collectAsState()
                 val accessibilityEnabled = accessibilityInSettings || boundService != null
                 var alwaysListening by remember { mutableStateOf(NovaListeningService.isRunning) }
+                var resumeCount by remember { mutableIntStateOf(0) }
 
-                val apiKeys = (application as NovaApplication).container.apiKeys
+                val container = (application as NovaApplication).container
+                val apiKeys = container.apiKeys
                 // Bumped after a save so the masked display refreshes; the key itself is read
                 // per request, so a new one takes effect on the next command without a restart.
                 var apiKeyRevision by remember { mutableIntStateOf(0) }
-                val apiKeyMasked = remember(apiKeyRevision) { apiKeys.masked() }
                 val hasApiKey = remember(apiKeyRevision) { apiKeys.hasKey() }
+
+                // Re-read on resume as well as on save: the model file arrives over adb while
+                // the app is in the background, and the row would otherwise still claim there
+                // is no model.
+                val plannerSummary = remember(apiKeyRevision, resumeCount) {
+                    describePlanner(container.localModels, apiKeys)
+                }
 
                 val permissionLauncher = rememberPermissionLauncher { granted ->
                     micGranted = granted
@@ -87,6 +97,7 @@ class MainActivity : ComponentActivity() {
                             accessibilityInSettings =
                                 NovaAccessibilityService.isEnabled(this@MainActivity)
                             alwaysListening = NovaListeningService.isRunning
+                            resumeCount++
                         }
                     }
                     lifecycle.addObserver(observer)
@@ -114,7 +125,7 @@ class MainActivity : ComponentActivity() {
                     micGranted = micGranted,
                     accessibilityEnabled = accessibilityEnabled,
                     alwaysListening = alwaysListening,
-                    apiKeyMasked = apiKeyMasked,
+                    plannerSummary = plannerSummary,
                     hasApiKey = hasApiKey,
                     onMicTap = viewModel::toggleListening,
                     onSubmit = viewModel::submit,
@@ -162,6 +173,25 @@ class MainActivity : ComponentActivity() {
      */
     private fun readCommandExtra(intent: Intent?): String? =
         if (BuildConfig.DEBUG) intent?.getStringExtra(EXTRA_COMMAND) else null
+
+    /**
+     * One line saying where planning will actually run.
+     *
+     * Worth showing plainly: an on-device model and an API key behave very differently — one is
+     * slow and private, the other fast and billed — and a user should never have to guess which
+     * one a command just used.
+     */
+    private fun describePlanner(models: LocalModelStore, keys: ApiKeyStore): String =
+        when (val status = models.status()) {
+            is ModelStatus.Ready ->
+                "On-device model, ${status.sizeBytes / 1_048_576} MB — private, no network"
+
+            is ModelStatus.TooLittleMemory ->
+                "Model installed but won't fit in free memory right now"
+
+            ModelStatus.NotInstalled ->
+                if (keys.hasKey()) "OpenAI key ${keys.masked()}" else "Needs a model or an API key"
+        }
 
     private fun hasMicPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==

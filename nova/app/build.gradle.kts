@@ -60,6 +60,7 @@ dependencies {
     implementation(project(":core:speech"))
     implementation(project(":feature:device"))
     implementation(project(":feature:accessibility"))
+    implementation(project(":feature:localllm"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

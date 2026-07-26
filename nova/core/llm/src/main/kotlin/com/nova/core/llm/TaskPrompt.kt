@@ -77,6 +77,15 @@ object TaskPrompt {
         - Never take a destructive or irreversible action (deleting, paying, sending money,
           changing account settings) unless the user's goal explicitly asked for it.
         - Keep "message" short enough to speak aloud.
+
+        Reply with one JSON object and nothing else:
+        {"decision":"act|finish|blocked","action":"open_app|tap|type|scroll_down|scroll_up|back|home|none","argument":"","message":"","rationale":""}
+
+        Examples:
+        {"decision":"act","action":"open_app","argument":"WhatsApp","message":"","rationale":"need the app first"}
+        {"decision":"act","action":"tap","argument":"Send","message":"","rationale":"send the message"}
+        {"decision":"finish","action":"none","argument":"","message":"Sent it.","rationale":""}
+        {"decision":"blocked","action":"none","argument":"","message":"There's no contact called Amit.","rationale":""}
     """.trimIndent()
 
     fun userPrompt(
@@ -109,7 +118,10 @@ object TaskPrompt {
      * guessed action. A malformed reply is not a reason to touch someone's phone at random.
      */
     fun parse(raw: String): PlannerDecision {
-        val reply = runCatching { json.decodeFromString<PlannerReply>(raw) }
+        val payload = extractJsonObject(raw)
+            ?: return PlannerDecision.Blocked("I couldn't work out what to do next.")
+
+        val reply = runCatching { json.decodeFromString<PlannerReply>(payload) }
             .getOrElse { return PlannerDecision.Blocked("I couldn't work out what to do next.") }
 
         return when (reply.decision.lowercase()) {
@@ -121,6 +133,40 @@ object TaskPrompt {
 
             else -> PlannerDecision.Blocked("I couldn't work out what to do next.")
         }
+    }
+
+    /**
+     * Pulls the first balanced JSON object out of a reply.
+     *
+     * A schema-constrained API returns bare JSON, but a small on-device model routinely wraps
+     * it in prose or a ```json fence. Rejecting those outright would make the local model look
+     * broken when it actually answered correctly. Brace counting rather than a regex, because
+     * the values contain braces often enough to matter — and string contents are skipped so a
+     * brace inside dictated text cannot unbalance the scan.
+     */
+    internal fun extractJsonObject(raw: String): String? {
+        val start = raw.indexOf('{')
+        if (start < 0) return null
+
+        var depth = 0
+        var inString = false
+        var escaped = false
+
+        for (index in start until raw.length) {
+            val character = raw[index]
+            when {
+                escaped -> escaped = false
+                character == '\\' && inString -> escaped = true
+                character == '"' -> inString = !inString
+                inString -> Unit
+                character == '{' -> depth++
+                character == '}' -> {
+                    depth--
+                    if (depth == 0) return raw.substring(start, index + 1)
+                }
+            }
+        }
+        return null
     }
 
     private fun PlannerReply.toAction(): NovaAction? = when (action.lowercase()) {

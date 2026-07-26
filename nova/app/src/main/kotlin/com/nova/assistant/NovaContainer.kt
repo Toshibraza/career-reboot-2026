@@ -6,8 +6,11 @@ import com.nova.core.agent.AgentRuntime
 import com.nova.core.agent.SpeakActionExecutor
 import com.nova.core.agent.rules.RuleIntentEngine
 import com.nova.core.agent.task.TaskPlanner
+import com.nova.core.llm.ChatClient
 import com.nova.core.llm.OpenAiClient
-import com.nova.core.llm.OpenAiTaskPlanner
+import com.nova.core.llm.LlmTaskPlanner
+import com.nova.feature.localllm.LocalChatClient
+import com.nova.feature.localllm.LocalModelStore
 import com.nova.core.speech.AndroidSpeaker
 import com.nova.core.speech.AndroidSpeechToText
 import com.nova.core.speech.Speaker
@@ -60,9 +63,32 @@ class NovaContainer(context: Context) {
      * key pasted into the app takes effect on the next command, with no restart. Without any
      * key the planner says so plainly instead of the runtime silently declining.
      */
-    private val taskPlanner: TaskPlanner by lazy {
-        OpenAiTaskPlanner(OpenAiClient(apiKey = { apiKeys.current() }))
+    val localModels: LocalModelStore by lazy { LocalModelStore(appContext) }
+
+    private val localClient: ChatClient by lazy { LocalChatClient(appContext, localModels) }
+
+    private val cloudClient: ChatClient by lazy { OpenAiClient(apiKey = { apiKeys.current() }) }
+
+    /**
+     * On-device model if one is installed, otherwise the API.
+     *
+     * Chosen per request, so side-loading a model takes effect on the next command.
+     *
+     * A local failure deliberately does **not** fall back to the cloud. Someone who installed a
+     * model on their phone did it so their screen contents stay on their phone; quietly posting
+     * that screen to an API because the local model ran out of memory would betray exactly the
+     * choice they made. The failure is reported instead.
+     */
+    private val chatClient: ChatClient = object : ChatClient {
+        override suspend fun complete(system: String, user: String): String =
+            if (localModels.isInstalled()) {
+                localClient.complete(system, user)
+            } else {
+                cloudClient.complete(system, user)
+            }
     }
+
+    private val taskPlanner: TaskPlanner by lazy { LlmTaskPlanner(chatClient) }
 
     val runtime: AgentRuntime by lazy {
         AgentRuntime(

@@ -7,9 +7,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.IOException
 
-class OpenAiTaskPlannerTest {
+class LlmTaskPlannerTest {
 
-    private fun plannerThatFailsWith(failure: Throwable) = OpenAiTaskPlanner(
+    private fun plannerThatFailsWith(failure: Throwable) = LlmTaskPlanner(
         object : ChatClient {
             override suspend fun complete(system: String, user: String): String = throw failure
         },
@@ -49,7 +49,7 @@ class OpenAiTaskPlannerTest {
 
     @Test
     fun `a good reply becomes an action`() = runTest {
-        val planner = OpenAiTaskPlanner(
+        val planner = LlmTaskPlanner(
             object : ChatClient {
                 override suspend fun complete(system: String, user: String): String =
                     """{"decision":"act","action":"open_app","argument":"Settings","message":"","rationale":""}"""
