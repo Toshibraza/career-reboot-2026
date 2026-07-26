@@ -44,7 +44,19 @@ class ScreenTextReader {
         val service = NovaAccessibilityService.connected
             ?: return OcrResult.Unavailable("Turn on Nova's accessibility service and I can read it.")
 
-        val bitmap = service.captureScreen()
+        // A SecurityException here means the service is running without the screenshot
+        // capability — which happens when the config declaring it was added after the user
+        // enabled the service. Turning it off and on again re-reads the capabilities.
+        val bitmap = runCatching { service.captureScreen() }
+            .getOrElse { failure ->
+                return if (failure is SecurityException) {
+                    OcrResult.Unavailable(
+                        "I need screenshot permission. Turn Nova's accessibility service off and on again.",
+                    )
+                } else {
+                    OcrResult.Unavailable("I couldn't capture the screen.")
+                }
+            }
             ?: return OcrResult.Unavailable("I couldn't capture the screen — it may be a secure one.")
 
         return try {

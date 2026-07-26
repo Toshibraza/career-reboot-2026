@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.nova.core.agent.ActionResult
 import com.nova.assistant.NovaApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +41,15 @@ class NovaCommandReceiver : BroadcastReceiver() {
             // Nova's answer is otherwise only spoken, which is invisible to adb. Without this,
             // a command that quietly declined looks identical to one that worked.
             Log.i(TAG, "\"$command\" -> ${response.plan.actions} -> ${response.spoken}")
+
+            // The runtime turns an executor throwable into a plain "That didn't work", which
+            // is right for the user and useless for debugging. Without this the cause is
+            // dropped, and an unexpected exception looks identical to a handled refusal.
+            response.results
+                .filterIsInstance<ActionResult.Failure>()
+                .mapNotNull { it.cause }
+                .forEach { Log.w(TAG, "action threw", it) }
+
             container.speaker.speak(response.spoken)
         }
     }
