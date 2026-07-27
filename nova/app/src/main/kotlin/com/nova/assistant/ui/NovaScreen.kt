@@ -166,10 +166,8 @@ fun NovaScreen(
                 )
             }
 
-            CommandInput(onSubmit)
-
-            Spacer(Modifier.height(16.dp))
-
+            // Orb above the text field: voice is the primary way in, and the keyboard pushes
+            // whatever sits below it off screen when the field is focused.
             VoiceOrb(
                 mode = state.status.toOrbMode(),
                 amplitude = state.level,
@@ -177,7 +175,9 @@ fun NovaScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
+
+            CommandInput(onSubmit)
         }
     }
 }
