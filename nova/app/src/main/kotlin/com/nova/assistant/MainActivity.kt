@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                 val context = LocalContext.current
                 val viewModel: NovaViewModel = viewModel(factory = NovaViewModel.Factory)
                 val state by viewModel.state.collectAsState()
+                val voices by viewModel.voices.collectAsState()
 
                 var micGranted by remember { mutableStateOf(hasMicPermission()) }
 
@@ -164,6 +165,11 @@ class MainActivity : ComponentActivity() {
                         apiKeys.clear()
                         apiKeyRevision++
                     },
+                    voices = voices,
+                    selectedVoiceId = container.voicePreference.current(),
+                    onOpenVoicePicker = viewModel::openVoicePicker,
+                    onCloseVoicePicker = viewModel::closeVoicePicker,
+                    onChooseVoice = viewModel::chooseVoice,
                     onOpenLibrary = viewModel::openLibrary,
                     onCloseLibrary = viewModel::closeLibrary,
                     onForget = viewModel::forget,

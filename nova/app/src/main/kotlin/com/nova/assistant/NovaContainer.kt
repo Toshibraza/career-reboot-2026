@@ -53,7 +53,11 @@ class NovaContainer(context: Context) {
 
     val speechToText: SpeechToText by lazy { AndroidSpeechToText(appContext) }
 
-    val speaker: Speaker by lazy { AndroidSpeaker(appContext) }
+    val voicePreference: VoicePreference by lazy { VoicePreference(appContext) }
+
+    val speaker: Speaker by lazy {
+        AndroidSpeaker(appContext, preferredVoiceId = { voicePreference.current() })
+    }
 
     /**
      * Gated rather than polling: the recogniser only starts once raw microphone energy

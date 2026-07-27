@@ -17,6 +17,7 @@ import com.nova.core.agent.routine.Routine
 import com.nova.core.agent.routine.RoutineTrigger
 import com.nova.core.speech.SpeechError
 import com.nova.core.speech.SpeechEvent
+import com.nova.core.speech.VoiceOption
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -190,6 +191,32 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
         NovaAction.GoBack -> "back"
         NovaAction.GoHome -> "home"
         else -> this::class.simpleName.orEmpty()
+    }
+
+    /** Voices to choose from, loaded on demand. Null while the picker is closed. */
+    private val _voices = MutableStateFlow<List<VoiceOption>?>(null)
+    val voices: StateFlow<List<VoiceOption>?> = _voices.asStateFlow()
+
+    fun openVoicePicker() {
+        viewModelScope.launch { _voices.value = container.speaker.voices() }
+    }
+
+    fun closeVoicePicker() {
+        _voices.value = null
+    }
+
+    /**
+     * Switches voice and immediately speaks a sample.
+     *
+     * Hearing it is the entire point — the engine exposes no gender, so the only reliable test
+     * is the user's own ear.
+     */
+    fun chooseVoice(option: VoiceOption) {
+        viewModelScope.launch {
+            container.voicePreference.save(option.id)
+            container.speaker.useVoice(option.id)
+            container.speaker.speak("This is how I sound.")
+        }
     }
 
     fun openLibrary() {

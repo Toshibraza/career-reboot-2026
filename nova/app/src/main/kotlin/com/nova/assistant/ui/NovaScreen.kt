@@ -66,12 +66,26 @@ fun NovaScreen(
     onOpenAssistantSettings: () -> Unit,
     onSaveApiKey: (String) -> Unit,
     onClearApiKey: () -> Unit,
+    voices: List<com.nova.core.speech.VoiceOption>?,
+    selectedVoiceId: String?,
+    onOpenVoicePicker: () -> Unit,
+    onCloseVoicePicker: () -> Unit,
+    onChooseVoice: (com.nova.core.speech.VoiceOption) -> Unit,
     onOpenLibrary: () -> Unit,
     onCloseLibrary: () -> Unit,
     onForget: (com.nova.core.agent.memory.MemoryEntry) -> Unit,
     onDeleteRoutine: (com.nova.core.agent.routine.Routine) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    voices?.let {
+        VoicePicker(
+            voices = it,
+            selectedId = selectedVoiceId,
+            onChoose = onChooseVoice,
+            onClose = onCloseVoicePicker,
+        )
+    }
+
     state.library?.let { library ->
         LibrarySheet(
             library = library,
@@ -136,6 +150,7 @@ fun NovaScreen(
                 onOpenAssistantSettings = onOpenAssistantSettings,
                 onSaveApiKey = onSaveApiKey,
                 onClearApiKey = onClearApiKey,
+                onOpenVoicePicker = onOpenVoicePicker,
             )
 
             Spacer(Modifier.height(12.dp))
@@ -185,6 +200,7 @@ private fun SetupSection(
     onOpenAssistantSettings: () -> Unit,
     onSaveApiKey: (String) -> Unit,
     onClearApiKey: () -> Unit,
+    onOpenVoicePicker: () -> Unit,
 ) {
     Column {
         Row(
@@ -221,6 +237,19 @@ private fun SetupSection(
                 onSave = onSaveApiKey,
                 onClear = onClearApiKey,
             )
+
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Voice", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Android doesn't say which voices are male, so pick by ear.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = onOpenVoicePicker) { Text("Choose") }
+            }
         }
     }
 }

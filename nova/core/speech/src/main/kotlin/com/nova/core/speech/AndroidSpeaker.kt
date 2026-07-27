@@ -20,6 +20,8 @@ import kotlin.coroutines.resume
 class AndroidSpeaker(
     context: Context,
     private val locale: Locale = Locale.getDefault(),
+    /** Voice chosen by the user, if any. Overrides the heuristic entirely. */
+    private val preferredVoiceId: () -> String? = { null },
 ) : Speaker {
 
     private val ready = CompletableDeferred<Boolean>()
@@ -101,6 +103,16 @@ class AndroidSpeaker(
         val all = runCatching { tts.voices }.getOrNull().orEmpty()
             .filter { it.locale.language == locale.language }
 
+        // An explicit choice wins outright. Gender cannot be read from the engine, so a user
+        // who has heard the voices knows better than any heuristic here.
+        preferredVoiceId()?.let { chosen ->
+            all.firstOrNull { it.name == chosen }?.let { voice ->
+                runCatching { tts.voice = voice }
+                Log.i(TAG, "using chosen voice ${voice.name}")
+                return
+            }
+        }
+
         val male = all
             .filter { it.name.looksMale() }
             .minByOrNull { voice ->
@@ -123,6 +135,46 @@ class AndroidSpeaker(
                     all.take(MAX_LOGGED_VOICES).map { it.name },
             )
         }
+    }
+
+    override suspend fun voices(): List<VoiceOption> {
+        if (!ready.await()) return emptyList()
+
+        return runCatching { tts.voices }.getOrNull().orEmpty()
+            .filter { it.locale.language == locale.language }
+            .sortedWith(
+                compareBy(
+                    { it.locale.country != locale.country },
+                    { it.isNetworkConnectionRequired },
+                    { it.name },
+                ),
+            )
+            .map { voice ->
+                VoiceOption(
+                    id = voice.name,
+                    label = "${voice.locale.displayName} · ${voice.name.substringAfterLast('-', voice.name)}",
+                    offline = !voice.isNetworkConnectionRequired,
+                    likelyMale = voice.name.looksMale(),
+                )
+            }
+    }
+
+    override suspend fun useVoice(id: String?) {
+        if (!ready.await()) return
+
+        if (id == null) {
+            // Back to automatic: clear the cache so the heuristic runs again next utterance.
+            voiceChosen = false
+            return
+        }
+
+        runCatching { tts.voices }.getOrNull().orEmpty()
+            .firstOrNull { it.name == id }
+            ?.let {
+                runCatching { tts.voice = it }
+                voiceChosen = true
+                Log.i(TAG, "switched to $id")
+            }
     }
 
     override fun stop() {
@@ -150,8 +202,9 @@ class AndroidSpeaker(
          * to correct it.
          */
         val MALE_VOICE_IDS = setOf(
-            // Indian English
-            "en-in-x-enc", "en-in-x-end",
+            // Indian English. "enc" was listed here and turned out to be female on a real
+            // device — which is precisely why the user can now override this entirely.
+            "en-in-x-end", "en-in-x-ena",
             // US English
             "en-us-x-iob", "en-us-x-iog", "en-us-x-iol", "en-us-x-iom",
             // British English
