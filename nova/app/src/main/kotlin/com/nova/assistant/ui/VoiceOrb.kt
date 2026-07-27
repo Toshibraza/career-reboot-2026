@@ -51,6 +51,36 @@ fun VoiceOrb(
     modifier: Modifier = Modifier,
     height: Dp = 190.dp,
 ) {
+    // Motion only while there is something to show. Idle and thinking hold a fixed pose.
+    //
+    // The branch matters more than it looks: an infinite transition recomposes this Canvas on
+    // every frame for as long as it exists, so gating the *values* would still redraw the orb
+    // sixty times a second on an idle screen. Not creating the transition is what actually
+    // stops the work.
+    if (mode == OrbMode.LISTENING || mode == OrbMode.SPEAKING) {
+        AnimatedOrb(mode, amplitude, onTap, modifier, height)
+    } else {
+        OrbCanvas(
+            mode = mode,
+            phaseA = RESTING_PHASE_A,
+            phaseB = RESTING_PHASE_B,
+            phaseC = RESTING_PHASE_C,
+            energy = RESTING_ENERGY,
+            onTap = onTap,
+            modifier = modifier,
+            height = height,
+        )
+    }
+}
+
+@Composable
+private fun AnimatedOrb(
+    mode: OrbMode,
+    amplitude: Float,
+    onTap: () -> Unit,
+    modifier: Modifier,
+    height: Dp,
+) {
     val transition = rememberInfiniteTransition(label = "orb")
 
     // Non-integer period ratios, so crests never line up twice and the motion never visibly
@@ -81,10 +111,9 @@ fun VoiceOrb(
         // which looks broken rather than attentive.
         OrbMode.LISTENING -> 0.32f + amplitude.coerceIn(0f, 1f) * 0.68f
         OrbMode.SPEAKING -> 0.50f + 0.30f * sin(breath).toFloat()
-        OrbMode.THINKING -> 0.28f + 0.14f * sin(breath * 0.6f).toFloat()
-        // Never fully still. A resting waveform that drifts says "ready"; a flat one says
-        // "crashed".
-        OrbMode.IDLE -> 0.22f + 0.06f * sin(breath * 0.35f).toFloat()
+        // Unreachable — this composable only runs for the two active modes — but kept exact
+        // so a future mode added to the branch above cannot silently animate at zero.
+        else -> RESTING_ENERGY
     }
 
     // Springy rather than linear: a voice peaks faster than it decays, and a linear follow
@@ -95,6 +124,21 @@ fun VoiceOrb(
         label = "energy",
     )
 
+    OrbCanvas(mode, phaseA, phaseB, phaseC, energy, onTap, modifier, height)
+}
+
+/** Draws one frame. Given fixed values it renders a still image and never redraws. */
+@Composable
+private fun OrbCanvas(
+    mode: OrbMode,
+    phaseA: Float,
+    phaseB: Float,
+    phaseC: Float,
+    energy: Float,
+    onTap: () -> Unit,
+    modifier: Modifier,
+    height: Dp,
+) {
     val palette = paletteFor(mode)
 
     Canvas(
@@ -295,6 +339,18 @@ private fun paletteFor(mode: OrbMode): List<Color> = when (mode) {
 }
 
 private const val TWO_PI = (2 * PI).toFloat()
+
+/**
+ * The pose held when nothing is happening.
+ *
+ * Chosen to look like a waveform caught mid-motion rather than a flat line — still, but clearly
+ * a voice control rather than a decorative bar. The phases are arbitrary; they were picked
+ * because the resulting shape is asymmetric and reads well.
+ */
+private const val RESTING_PHASE_A = 0.9f
+private const val RESTING_PHASE_B = 2.4f
+private const val RESTING_PHASE_C = 4.1f
+private const val RESTING_ENERGY = 0.30f
 
 /** Fine enough to read as a curve, coarse enough to stay cheap every frame. */
 private const val STEP = 6f
