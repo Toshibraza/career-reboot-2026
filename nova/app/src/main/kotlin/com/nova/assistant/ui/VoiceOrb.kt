@@ -110,27 +110,20 @@ fun VoiceOrb(
         val midY = size.height / 2f
         val centre = Offset(size.width / 2f, midY)
 
-        // Dark backdrop so the neon actually reads. Without it these colours wash out
-        // completely on a light background. Rounded, so it sits in the layout as a panel
-        // rather than a band cut across the screen.
-        drawRoundRect(
-            brush = Brush.radialGradient(
-                colors = listOf(BACKDROP_CORE, BACKDROP_EDGE),
-                center = centre,
-                radius = size.width * 0.75f,
-            ),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * 0.16f),
-        )
+        // No backdrop: the waveform sits directly on the app background. That means the
+        // colours carry it alone, so the palette is deeper and the ribbons more opaque than
+        // they were against dark navy — the same neon that glowed there simply vanishes here.
 
         // Nearly half the panel height. The first values here were a third of this, and the
         // ribbons were invisible behind the sphere — a waveform that cannot be seen is just an
         // expensive rectangle.
         val maxWave = size.height * 0.46f
 
-        // Back to front: wide and faint first, tight and bright last.
-        drawRibbon(midY, maxWave * (0.62f + energy * 0.60f), 1.4f, phaseC, palette, 0.42f)
-        drawRibbon(midY, maxWave * (0.48f + energy * 0.85f), 2.3f, phaseB, palette, 0.55f)
-        drawRibbon(midY, maxWave * (0.34f + energy * 1.10f), 3.7f, phaseA, palette, 0.80f)
+        // Back to front: wide and faint first, tight and bright last. More opaque than the
+        // dark-backdrop version, because translucent neon over white turns to pastel.
+        drawRibbon(midY, maxWave * (0.62f + energy * 0.60f), 1.4f, phaseC, palette, 0.55f)
+        drawRibbon(midY, maxWave * (0.48f + energy * 0.85f), 2.3f, phaseB, palette, 0.72f)
+        drawRibbon(midY, maxWave * (0.34f + energy * 1.10f), 3.7f, phaseA, palette, 0.95f)
 
         // Smaller than before, so the ribbons read on both sides instead of being covered.
         drawSphere(centre, size.height * 0.148f * (1f + energy * 0.20f), phaseA, energy, palette)
@@ -295,14 +288,11 @@ private fun DrawScope.drawMicGlyph(centre: Offset, size: Float) {
  */
 private fun paletteFor(mode: OrbMode): List<Color> = when (mode) {
     // Unmistakable while the microphone is open.
-    OrbMode.LISTENING -> listOf(Color(0xFFFF2D9B), Color(0xFFC13AF0), Color(0xFF3B5BFF))
-    OrbMode.SPEAKING -> listOf(Color(0xFF22D3EE), Color(0xFF6366F1), Color(0xFFC13AF0))
-    OrbMode.THINKING -> listOf(Color(0xFFFBBF24), Color(0xFFF43F5E), Color(0xFFC13AF0))
-    OrbMode.IDLE -> listOf(Color(0xFFE040FB), Color(0xFF7C3AED), Color(0xFF2563EB))
+    OrbMode.LISTENING -> listOf(Color(0xFFE01480), Color(0xFF9C27E0), Color(0xFF2547E8))
+    OrbMode.SPEAKING -> listOf(Color(0xFF0EA5B7), Color(0xFF4F46E5), Color(0xFF9C27E0))
+    OrbMode.THINKING -> listOf(Color(0xFFE08A00), Color(0xFFE11D48), Color(0xFF9C27E0))
+    OrbMode.IDLE -> listOf(Color(0xFFB829D9), Color(0xFF6D28D9), Color(0xFF1D4ED8))
 }
-
-private val BACKDROP_CORE = Color(0xFF1B1B44)
-private val BACKDROP_EDGE = Color(0xFF0E0E2A)
 
 private const val TWO_PI = (2 * PI).toFloat()
 
