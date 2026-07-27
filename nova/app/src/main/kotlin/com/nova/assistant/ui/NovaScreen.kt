@@ -279,11 +279,14 @@ private fun Header(status: NovaStatus, onOpenLibrary: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
+                // The busy states say they can be stopped. The orb is the only control, so if
+                // it does not advertise that it interrupts, nobody will find it — and a
+                // multi-step task can spend a couple of minutes tapping around another app.
                 text = when (status) {
                     NovaStatus.IDLE -> "Ready"
-                    NovaStatus.LISTENING -> "Listening…"
-                    NovaStatus.THINKING -> "Working on it…"
-                    NovaStatus.SPEAKING -> "Speaking"
+                    NovaStatus.LISTENING -> "Listening… tap to stop"
+                    NovaStatus.THINKING -> "Working on it… tap to stop"
+                    NovaStatus.SPEAKING -> "Speaking… tap to stop"
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

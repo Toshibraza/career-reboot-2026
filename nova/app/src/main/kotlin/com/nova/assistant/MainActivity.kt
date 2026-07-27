@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
                     alwaysListening = alwaysListening,
                     plannerSummary = plannerSummary,
                     hasApiKey = hasApiKey,
-                    onMicTap = viewModel::toggleListening,
+                    onMicTap = viewModel::onOrbTap,
                     onSubmit = viewModel::submit,
                     onRequestMic = { permissionLauncher() },
                     onOpenSettingsFor = { permission ->

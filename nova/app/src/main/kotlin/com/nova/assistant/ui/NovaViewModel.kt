@@ -74,9 +74,34 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
     val state: StateFlow<NovaUiState> = _state.asStateFlow()
 
     private var listenJob: Job? = null
+    private var commandJob: Job? = null
 
-    fun toggleListening() {
-        if (_state.value.status == NovaStatus.LISTENING) stopListening() else startListening()
+    /**
+     * What tapping the orb does, which depends entirely on what Raza is doing.
+     *
+     * One entry point rather than several buttons: the orb is the only control, and its meaning
+     * should follow the state the user can already see.
+     */
+    fun onOrbTap() {
+        when (_state.value.status) {
+            NovaStatus.IDLE -> startListening()
+            NovaStatus.LISTENING -> stopListening()
+            NovaStatus.THINKING, NovaStatus.SPEAKING -> cancel()
+        }
+    }
+
+    /**
+     * Stops whatever is running.
+     *
+     * This matters most for a multi-step task: the planner can run for a couple of minutes,
+     * tapping and typing in other apps, and until now there was no way to interrupt it. An
+     * agent acting on someone's phone with no stop button is a defect, not a missing feature.
+     */
+    fun cancel() {
+        commandJob?.cancel()
+        commandJob = null
+        container.speaker.stop()
+        _state.update { it.copy(status = NovaStatus.IDLE) }
     }
 
     /**
@@ -139,7 +164,10 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
     fun submit(utterance: String, echo: Boolean = false) {
         if (utterance.isBlank()) return
 
-        viewModelScope.launch {
+        // A new command supersedes one still running, rather than the two interleaving taps
+        // on whatever app is open.
+        commandJob?.cancel()
+        commandJob = viewModelScope.launch {
             _state.update { it.copy(status = NovaStatus.THINKING, message = null, pendingPermission = null) }
 
             // Logged for the same reason the debug receiver logs: without it there is no way
@@ -169,6 +197,7 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
 
             container.speaker.speak(response.spoken)
             _state.update { it.copy(status = NovaStatus.IDLE) }
+            commandJob = null
         }
     }
 
