@@ -2,6 +2,7 @@ package com.nova.assistant.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,19 +107,22 @@ fun NovaScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            AssistGestureRow(onOpenAssistantSettings)
+            // Open by default only while something still needs doing. These rows matter once,
+            // during setup, and then never again — leaving them expanded pushes the thing the
+            // user actually reaches for to the bottom of the screen forever.
+            var setupOpen by rememberSaveable { mutableStateOf(!accessibilityEnabled || !micGranted) }
 
-            Spacer(Modifier.height(8.dp))
-
-            AlwaysListeningRow(alwaysListening, micGranted, onAlwaysListeningChange)
-
-            Spacer(Modifier.height(8.dp))
-
-            PlannerRow(
-                summary = plannerSummary,
-                hasKey = hasApiKey,
-                onSave = onSaveApiKey,
-                onClear = onClearApiKey,
+            SetupSection(
+                open = setupOpen,
+                onToggle = { setupOpen = !setupOpen },
+                alwaysListening = alwaysListening,
+                micGranted = micGranted,
+                plannerSummary = plannerSummary,
+                hasApiKey = hasApiKey,
+                onAlwaysListeningChange = onAlwaysListeningChange,
+                onOpenAssistantSettings = onOpenAssistantSettings,
+                onSaveApiKey = onSaveApiKey,
+                onClearApiKey = onClearApiKey,
             )
 
             Spacer(Modifier.height(12.dp))
@@ -147,6 +152,72 @@ fun NovaScreen(
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+/**
+ * The setup rows, behind a single line when there is nothing to do.
+ *
+ * Collapsed it reads as one word; expanded it is the same three controls as before. Nothing is
+ * hidden that the user still needs — the section opens itself whenever a permission is missing.
+ */
+@Composable
+private fun SetupSection(
+    open: Boolean,
+    onToggle: () -> Unit,
+    alwaysListening: Boolean,
+    micGranted: Boolean,
+    plannerSummary: String,
+    hasApiKey: Boolean,
+    onAlwaysListeningChange: (Boolean) -> Unit,
+    onOpenAssistantSettings: () -> Unit,
+    onSaveApiKey: (String) -> Unit,
+    onClearApiKey: () -> Unit,
+) {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
+        ) {
+            Text(
+                text = "Setup",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                // Says what is on rather than just "expand", so the collapsed line still
+                // carries the state it is hiding.
+                text = if (open) "Hide" else summaryOf(alwaysListening, hasApiKey),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        if (open) {
+            Spacer(Modifier.height(8.dp))
+            AssistGestureRow(onOpenAssistantSettings)
+
+            Spacer(Modifier.height(8.dp))
+            AlwaysListeningRow(alwaysListening, micGranted, onAlwaysListeningChange)
+
+            Spacer(Modifier.height(8.dp))
+            PlannerRow(
+                summary = plannerSummary,
+                hasKey = hasApiKey,
+                onSave = onSaveApiKey,
+                onClear = onClearApiKey,
+            )
+        }
+    }
+}
+
+private fun summaryOf(alwaysListening: Boolean, hasApiKey: Boolean): String {
+    val on = buildList {
+        if (alwaysListening) add("always listening")
+        if (hasApiKey) add("planner")
+    }
+    return if (on.isEmpty()) "Show" else on.joinToString(", ")
 }
 
 private fun NovaStatus.toOrbMode(): OrbMode = when (this) {
