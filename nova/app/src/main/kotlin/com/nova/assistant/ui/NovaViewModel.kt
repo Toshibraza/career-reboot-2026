@@ -12,6 +12,9 @@ import com.nova.core.agent.ActionResult
 import com.nova.core.agent.AgentResponse
 import com.nova.core.agent.NovaAction
 import com.nova.core.agent.RequiredPermission
+import com.nova.core.agent.memory.MemoryEntry
+import com.nova.core.agent.routine.Routine
+import com.nova.core.agent.routine.RoutineTrigger
 import com.nova.core.speech.SpeechError
 import com.nova.core.speech.SpeechEvent
 import kotlinx.coroutines.Job
@@ -38,6 +41,18 @@ data class Turn(
     val steps: List<String> = emptyList(),
 )
 
+/**
+ * What Raza is holding, for the user to inspect and correct.
+ *
+ * Null when closed. Memory and routines are otherwise write-only by voice: a misheard fact or a
+ * reminder set for the wrong time can be created but never seen, and "forget my parking spot"
+ * only helps if you remember it went in wrong.
+ */
+data class LibraryState(
+    val memories: List<MemoryEntry> = emptyList(),
+    val routines: List<Routine> = emptyList(),
+)
+
 data class NovaUiState(
     val status: NovaStatus = NovaStatus.IDLE,
     /** Live, unconfirmed transcript. Displayed but never acted on. */
@@ -48,6 +63,8 @@ data class NovaUiState(
     val message: String? = null,
     /** Set when an action was blocked; the UI offers a button to the right settings screen. */
     val pendingPermission: RequiredPermission? = null,
+    /** Non-null while the user is looking at what Raza has stored. */
+    val library: LibraryState? = null,
 )
 
 class NovaViewModel(private val container: NovaContainer) : ViewModel() {
@@ -173,6 +190,37 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
         NovaAction.GoBack -> "back"
         NovaAction.GoHome -> "home"
         else -> this::class.simpleName.orEmpty()
+    }
+
+    fun openLibrary() {
+        viewModelScope.launch { refreshLibrary() }
+    }
+
+    fun closeLibrary() = _state.update { it.copy(library = null) }
+
+    fun forget(entry: MemoryEntry) {
+        viewModelScope.launch {
+            container.memory.forget(entry.subject)
+            refreshLibrary()
+        }
+    }
+
+    fun deleteRoutine(routine: Routine) {
+        viewModelScope.launch {
+            // Cancelled as well as removed. Deleting the row without cancelling the alarm
+            // leaves it to fire once more against a routine that no longer exists.
+            container.routineScheduler.cancel(routine.id)
+            container.routines.remove(routine.id)
+            refreshLibrary()
+        }
+    }
+
+    private suspend fun refreshLibrary() {
+        val library = LibraryState(
+            memories = container.memory.all(),
+            routines = container.routines.all(),
+        )
+        _state.update { it.copy(library = library) }
     }
 
     fun dismissMessage() = _state.update { it.copy(message = null) }

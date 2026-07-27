@@ -164,6 +164,10 @@ class MainActivity : ComponentActivity() {
                         apiKeys.clear()
                         apiKeyRevision++
                     },
+                    onOpenLibrary = viewModel::openLibrary,
+                    onCloseLibrary = viewModel::closeLibrary,
+                    onForget = viewModel::forget,
+                    onDeleteRoutine = viewModel::deleteRoutine,
                 )
             }
         }

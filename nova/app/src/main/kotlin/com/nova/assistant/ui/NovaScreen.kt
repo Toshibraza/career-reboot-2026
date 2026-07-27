@@ -66,12 +66,25 @@ fun NovaScreen(
     onOpenAssistantSettings: () -> Unit,
     onSaveApiKey: (String) -> Unit,
     onClearApiKey: () -> Unit,
+    onOpenLibrary: () -> Unit,
+    onCloseLibrary: () -> Unit,
+    onForget: (com.nova.core.agent.memory.MemoryEntry) -> Unit,
+    onDeleteRoutine: (com.nova.core.agent.routine.Routine) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    state.library?.let { library ->
+        LibrarySheet(
+            library = library,
+            onForget = onForget,
+            onDeleteRoutine = onDeleteRoutine,
+            onClose = onCloseLibrary,
+        )
+    }
+
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.padding(20.dp)) {
 
-            Header(state.status)
+            Header(state.status, onOpenLibrary)
 
             Spacer(Modifier.height(12.dp))
 
@@ -228,23 +241,26 @@ private fun NovaStatus.toOrbMode(): OrbMode = when (this) {
 }
 
 @Composable
-private fun Header(status: NovaStatus) {
-    Column {
-        Text(
-            text = "Raza",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            text = when (status) {
-                NovaStatus.IDLE -> "Ready"
-                NovaStatus.LISTENING -> "Listening…"
-                NovaStatus.THINKING -> "Working on it…"
-                NovaStatus.SPEAKING -> "Speaking"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+private fun Header(status: NovaStatus, onOpenLibrary: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "Raza",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = when (status) {
+                    NovaStatus.IDLE -> "Ready"
+                    NovaStatus.LISTENING -> "Listening…"
+                    NovaStatus.THINKING -> "Working on it…"
+                    NovaStatus.SPEAKING -> "Speaking"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onOpenLibrary) { Text("What I know") }
     }
 }
 
