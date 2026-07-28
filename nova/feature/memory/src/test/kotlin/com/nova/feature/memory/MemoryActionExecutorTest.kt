@@ -15,7 +15,14 @@ class MemoryActionExecutorTest {
     /** In-memory stand-in matching SqliteMemory's semantics, including fuzzy recall. */
     private class FakeMemory : Memory {
         private val entries = mutableMapOf<String, MemoryEntry>()
-        private var clock = 0L
+
+        /**
+         * Real wall-clock milliseconds, not a counter.
+         *
+         * Recall now phrases old facts differently from fresh ones, so a fake ticking 0, 1, 2
+         * would put every stored fact in 1970 and test a code path production never takes.
+         */
+        private var clock = System.currentTimeMillis()
 
         override suspend fun remember(subject: String, detail: String) {
             entries[subject] = MemoryEntry(subject, detail, clock++)
@@ -29,6 +36,12 @@ class MemoryActionExecutorTest {
 
         override suspend fun forget(query: String): MemoryEntry? =
             recall(query)?.also { entries.remove(it.subject) }
+
+        /** Stores a fact as though it had been told to Raza [daysAgo] days ago. */
+        fun preload(subject: String, detail: String, daysAgo: Int) {
+            entries[subject] =
+                MemoryEntry(subject, detail, clock - daysAgo * 24L * 60 * 60 * 1000)
+        }
     }
 
     private val memory = FakeMemory()
@@ -53,6 +66,18 @@ class MemoryActionExecutorTest {
 
         assertEquals("my parking spot is D4.", spokenOf(NovaAction.Recall("my parking spot")))
         assertEquals(1, runBlocking { memory.all() }.size)
+    }
+
+    @Test
+    fun `an old fact is answered with how old it is`() {
+        // The reason this exists: where you parked three months ago is almost certainly not
+        // where your car is, and only the person asking can tell.
+        memory.preload("my parking spot", "B2", daysAgo = 90)
+
+        assertEquals(
+            "my parking spot is B2 — I noted that 3 months ago.",
+            spokenOf(NovaAction.Recall("parking spot")),
+        )
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.nova.core.agent.ActionExecutor
 import com.nova.core.agent.ActionResult
 import com.nova.core.agent.NovaAction
 import com.nova.core.agent.memory.Memory
+import com.nova.core.agent.memory.spoken
 
 /**
  * Stores and answers from what Nova has been told.
@@ -35,7 +36,9 @@ class MemoryActionExecutor(
         }
 
         is NovaAction.Recall -> memory.recall(action.subject)
-            ?.let { ActionResult.Success("${it.subject} is ${it.detail}.") }
+            // Answered with its age when the fact is old enough for that to matter. Where you
+            // parked is not still true three months later, and only the user can tell.
+            ?.let { ActionResult.Success(it.spoken()) }
             ?: ActionResult.Failure("I don't have anything about ${action.subject}.")
 
         NovaAction.RecallAll -> {

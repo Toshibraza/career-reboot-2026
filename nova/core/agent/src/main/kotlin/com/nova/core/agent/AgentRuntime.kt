@@ -1,5 +1,8 @@
 package com.nova.core.agent
 
+import com.nova.core.agent.guard.ActionGuard
+import com.nova.core.agent.guard.ActionOrigin
+import com.nova.core.agent.guard.GuardDecision
 import com.nova.core.agent.screen.ScreenSnapshot
 import com.nova.core.agent.task.PlannerDecision
 import com.nova.core.agent.task.StepRecord
@@ -22,6 +25,11 @@ class AgentRuntime(
     /** Absent means unrecognised commands are simply declined, as in Phase 1. */
     private val taskPlanner: TaskPlanner? = null,
     private val maxSteps: Int = DEFAULT_MAX_STEPS,
+    /**
+     * Vets planner-chosen actions only. Not optional, and deliberately not a constructor
+     * parameter anyone is likely to pass `null` to.
+     */
+    private val guard: ActionGuard = ActionGuard(),
 ) {
 
     suspend fun handle(utterance: String): AgentResponse {
@@ -111,6 +119,15 @@ class AgentRuntime(
                     return finish(goal, executed, results, decision.spoken)
 
                 is PlannerDecision.Act -> {
+                    // Checked before executing, never after. The whole task stops rather than
+                    // recording a failed step, because the planner reads that history and a
+                    // refusal in it is an invitation to look for a synonym — "Proceed" instead
+                    // of "Pay". A boundary the model can negotiate with is not a boundary.
+                    val verdict = guard.check(decision.action, screen, ActionOrigin.PLANNER)
+                    if (verdict is GuardDecision.Refuse) {
+                        return finish(goal, executed, results, verdict.spoken)
+                    }
+
                     val result = execute(decision.action)
                     executed += decision.action
                     results += result
