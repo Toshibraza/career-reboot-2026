@@ -87,6 +87,9 @@ sealed interface NovaAction {
     /** Propose an SMS. Same rule: proposes only, never sends. */
     data class SendSms(val query: String, val message: String) : NovaAction
 
+    /** Report on Raza's own health — permissions, services, models, keys. */
+    data object RunDiagnostics : NovaAction
+
     /** Carry out whatever was last proposed. */
     data object ConfirmPending : NovaAction
 

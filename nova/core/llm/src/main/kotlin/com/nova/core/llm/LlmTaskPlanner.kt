@@ -44,6 +44,9 @@ class LlmTaskPlanner(
      * into one message hid a real problem the first time this ran against the live API.
      */
     private fun Throwable.explain(): String = when {
+        this is RateLimitedException ->
+            "I've hit my limit on AI requests. It resets $until."
+
         this is ModelUnavailableException -> reason
 
         this is MissingApiKeyException ->

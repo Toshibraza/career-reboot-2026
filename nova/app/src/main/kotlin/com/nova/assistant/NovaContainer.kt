@@ -8,6 +8,7 @@ import com.nova.core.agent.rules.RuleIntentEngine
 import com.nova.core.agent.task.TaskPlanner
 import com.nova.core.llm.ChatClient
 import com.nova.core.llm.OpenAiClient
+import com.nova.core.llm.RateLimitedChatClient
 import com.nova.core.llm.LlmTaskPlanner
 import com.nova.feature.localllm.LocalChatClient
 import com.nova.feature.localllm.LocalModelStore
@@ -118,7 +119,16 @@ class NovaContainer(context: Context) {
 
     private val localClient: ChatClient by lazy { LocalChatClient(appContext, localModels) }
 
-    private val cloudClient: ChatClient by lazy { OpenAiClient(apiKey = { apiKeys.current() }) }
+    /**
+     * Wrapped in a rate limiter, unlike the local one.
+     *
+     * On-device inference costs only time, so rationing it would be friction. API calls cost
+     * money, a single task makes up to eight of them, and a routine could fire a task on a
+     * schedule while nobody is watching.
+     */
+    private val cloudClient: ChatClient by lazy {
+        RateLimitedChatClient(OpenAiClient(apiKey = { apiKeys.current() }))
+    }
 
     /**
      * On-device model if one is installed, otherwise the API.
@@ -152,6 +162,7 @@ class NovaContainer(context: Context) {
                 DeviceActionExecutor(deviceController, appRegistry),
                 AccessibilityActionExecutor(screenReader),
                 MemoryActionExecutor(memory),
+                DiagnosticsActionExecutor(appContext, this),
                 RoutineActionExecutor(routines, routineScheduler),
                 NotificationActionExecutor(notifications),
                 VisionActionExecutor(screenTextReader),

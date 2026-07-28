@@ -336,6 +336,13 @@ class RuleIntentEngine : IntentEngine {
             ),
             simpleRule("thanks", "^(?:thanks|thank you|cheers)$", NovaAction.Speak("Any time.")),
             simpleRule(
+                "diagnostics",
+                "\\b(?:diagnostics|self check|selfcheck)\\b|\\bwhat(?:s| is) wrong\\b|" +
+                    "\\bare you (?:ok|okay|working)\\b|\\bcheck yourself\\b|\\bstatus report\\b",
+                NovaAction.RunDiagnostics,
+            ),
+
+            simpleRule(
                 "identity",
                 "\\bwho are you\\b|\\bwhat(?:s| is) your name\\b",
                 NovaAction.Speak("I'm Raza, your assistant on this phone."),
