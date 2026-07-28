@@ -312,6 +312,15 @@ class RuleIntentEngine : IntentEngine {
                 }
             },
 
+            // Before the app rules, because "run" is one of their launch verbs — "run
+            // diagnostics" was being read as a request to open an app called "diagnostics".
+            simpleRule(
+                "diagnostics",
+                "\\b(?:diagnostics|self check|selfcheck)\\b|\\bwhat(?:s| is) wrong\\b|" +
+                    "\\bare you (?:ok|okay|working)\\b|\\bcheck yourself\\b|\\bstatus report\\b",
+                NovaAction.RunDiagnostics,
+            ),
+
             // --- Apps --------------------------------------------------------------------
             simpleRule(
                 "close-current",
@@ -336,17 +345,25 @@ class RuleIntentEngine : IntentEngine {
             ),
             simpleRule("thanks", "^(?:thanks|thank you|cheers)$", NovaAction.Speak("Any time.")),
             simpleRule(
-                "diagnostics",
-                "\\b(?:diagnostics|self check|selfcheck)\\b|\\bwhat(?:s| is) wrong\\b|" +
-                    "\\bare you (?:ok|okay|working)\\b|\\bcheck yourself\\b|\\bstatus report\\b",
-                NovaAction.RunDiagnostics,
-            ),
-
-            simpleRule(
                 "identity",
                 "\\bwho are you\\b|\\bwhat(?:s| is) your name\\b",
                 NovaAction.Speak("I'm Raza, your assistant on this phone."),
             ),
+
+            // --- Web search --------------------------------------------------------------
+            // Explicit verbs only. "What is X" deliberately stays a memory lookup: asking
+            // Raza what it knows should never quietly become a web request.
+            rule(
+                "web-search",
+                "^(?:search(?: the web)?(?: for)?|google|look up|find out about)\\s+(.+)$",
+            ) {
+                val query = it.rawAfter(
+                    "search the web for", "search the web", "search for", "search",
+                    "google", "look up", "find out about",
+                ) ?: it.group(1)
+
+                query.takeIf(String::isNotBlank)?.let { q -> listOf(NovaAction.SearchWeb(q.trim())) }
+            },
 
             // --- Memory ------------------------------------------------------------------
             // Registered last so nothing else is shadowed: "what is on screen" stays a screen

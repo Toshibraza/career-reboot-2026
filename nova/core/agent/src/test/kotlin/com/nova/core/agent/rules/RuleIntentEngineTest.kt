@@ -360,6 +360,31 @@ class RuleIntentEngineTest {
         assertEquals(NovaAction.DeleteRoutine("buy milk"), parse("cancel the reminder to buy milk"))
     }
 
+    // --- Diagnostics and search --------------------------------------------------------
+
+    @Test
+    fun `diagnostics is not mistaken for launching an app`() {
+        // "run" is a launch verb, so "run diagnostics" opened an app called "diagnostics"
+        // until the rule was moved ahead of the app rules.
+        assertEquals(NovaAction.RunDiagnostics, parse("run diagnostics"))
+        assertEquals(NovaAction.RunDiagnostics, parse("what is wrong"))
+        assertEquals(NovaAction.RunDiagnostics, parse("are you ok"))
+    }
+
+    @Test
+    fun `search takes explicit verbs and keeps the query intact`() {
+        assertEquals(NovaAction.SearchWeb("kotlin coroutines"), parse("search for kotlin coroutines"))
+        assertEquals(NovaAction.SearchWeb("best phone under 20000"), parse("google best phone under 20000"))
+        assertEquals(NovaAction.SearchWeb("Ramanujan"), parse("look up Ramanujan"))
+    }
+
+    @Test
+    fun `asking what Raza knows never becomes a web search`() {
+        // Memory questions must stay local. Turning "what is my gate code" into a web request
+        // would send a private fact to a third party.
+        assertEquals(NovaAction.Recall("gate code"), parse("what is my gate code"))
+    }
+
     // --- Memory ------------------------------------------------------------------------
 
     @Test

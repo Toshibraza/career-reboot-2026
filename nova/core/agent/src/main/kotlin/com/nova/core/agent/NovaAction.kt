@@ -90,6 +90,9 @@ sealed interface NovaAction {
     /** Report on Raza's own health — permissions, services, models, keys. */
     data object RunDiagnostics : NovaAction
 
+    /** Look something up on the web and read back what was found. */
+    data class SearchWeb(val query: String) : NovaAction
+
     /** Carry out whatever was last proposed. */
     data object ConfirmPending : NovaAction
 

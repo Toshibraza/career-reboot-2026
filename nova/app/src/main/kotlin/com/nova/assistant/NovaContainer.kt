@@ -32,6 +32,9 @@ import com.nova.feature.routines.RoutineActionExecutor
 import com.nova.feature.routines.RoutineScheduler
 import com.nova.feature.routines.SqliteRoutineStore
 import com.nova.core.agent.screen.ScreenReader
+import com.nova.core.agent.search.WebSearch
+import com.nova.core.search.ApifyWebSearch
+import com.nova.core.search.SearchActionExecutor
 import com.nova.feature.memory.MemoryActionExecutor
 import com.nova.feature.memory.SqliteMemory
 import com.nova.feature.accessibility.AccessibilityActionExecutor
@@ -109,6 +112,15 @@ class NovaContainer(context: Context) {
     val apiKeys: ApiKeyStore by lazy { ApiKeyStore(appContext) }
 
     /**
+     * Web search. Token read per call, so pasting one takes effect on the next command.
+     *
+     * Apify's own repository is a set of skills for AI coding agents — markdown telling a
+     * developer's agent how to drive their CLI — so none of it is consumable from Android.
+     * This calls the same Actors over their REST API instead.
+     */
+    val webSearch: WebSearch by lazy { ApifyWebSearch(token = { apiKeys.apifyToken() }) }
+
+    /**
      * Drives multi-step tasks the rule engine can't parse.
      *
      * Always constructed, because the key is read per request rather than captured here — a
@@ -163,6 +175,7 @@ class NovaContainer(context: Context) {
                 AccessibilityActionExecutor(screenReader),
                 MemoryActionExecutor(memory),
                 DiagnosticsActionExecutor(appContext, this),
+                SearchActionExecutor(webSearch),
                 RoutineActionExecutor(routines, routineScheduler),
                 NotificationActionExecutor(notifications),
                 VisionActionExecutor(screenTextReader),

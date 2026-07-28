@@ -13,10 +13,15 @@ plugins {
  * published one — a shipped app should call a backend that holds the key instead. Absent key
  * simply means no task planner, and Nova behaves as it did before Phase 3.
  */
-val openAiApiKey: String = Properties().apply {
+private val localProperties: Properties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use(::load)
-}.getProperty("openai.apiKey").orEmpty().trim()
+}
+
+val openAiApiKey: String = localProperties.getProperty("openai.apiKey").orEmpty().trim()
+
+/** Optional. Absent simply means web search is unavailable; everything else works. */
+val apifyToken: String = localProperties.getProperty("apify.token").orEmpty().trim()
 
 android {
     namespace = "com.nova.assistant"
@@ -30,6 +35,7 @@ android {
         versionName = "0.1.0"
 
         buildConfigField("String", "OPENAI_API_KEY", "\"$openAiApiKey\"")
+        buildConfigField("String", "APIFY_TOKEN", "\"$apifyToken\"")
     }
 
     buildTypes {
@@ -57,6 +63,7 @@ kotlin {
 dependencies {
     implementation(project(":core:agent"))
     implementation(project(":core:llm"))
+    implementation(project(":core:search"))
     implementation(project(":core:speech"))
     implementation(project(":feature:device"))
     implementation(project(":feature:accessibility"))

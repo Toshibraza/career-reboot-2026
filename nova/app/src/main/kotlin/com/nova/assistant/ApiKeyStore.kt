@@ -25,6 +25,23 @@ class ApiKeyStore(context: Context) {
         preferences.getString(KEY, null)?.trim().takeUnless { it.isNullOrEmpty() }
             ?: BuildConfig.OPENAI_API_KEY.trim()
 
+    /**
+     * The Apify token used for web search, or null.
+     *
+     * Kept in the same private file for the same reasons, and separate from the OpenAI key
+     * because they are independent: search works without a planner and vice versa.
+     */
+    fun apifyToken(): String? =
+        preferences.getString(APIFY_KEY, null)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: BuildConfig.APIFY_TOKEN.trim().takeIf { it.isNotEmpty() }
+
+    fun saveApifyToken(token: String) {
+        val cleaned = token.trim()
+        preferences.edit().apply {
+            if (cleaned.isEmpty()) remove(APIFY_KEY) else putString(APIFY_KEY, cleaned)
+        }.apply()
+    }
+
     fun hasKey(): Boolean = current().isNotEmpty()
 
     /** True when the key in use was pasted in the app rather than baked into the build. */
@@ -56,6 +73,7 @@ class ApiKeyStore(context: Context) {
     private companion object {
         const val FILE = "nova-credentials"
         const val KEY = "openai_api_key"
+        const val APIFY_KEY = "apify_token"
         const val MASK_VISIBLE = 6
     }
 }
