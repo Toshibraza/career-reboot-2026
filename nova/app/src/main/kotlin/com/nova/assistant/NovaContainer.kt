@@ -9,6 +9,7 @@ import com.nova.core.agent.task.TaskPlanner
 import com.nova.core.llm.ChatClient
 import com.nova.core.llm.OpenAiClient
 import com.nova.core.llm.RateLimitedChatClient
+import com.nova.core.llm.ConversationActionExecutor
 import com.nova.core.llm.LlmTaskPlanner
 import com.nova.feature.localllm.LocalChatClient
 import com.nova.feature.localllm.LocalModelStore
@@ -191,6 +192,9 @@ class NovaContainer(context: Context) {
                 MemoryActionExecutor(memory),
                 DiagnosticsActionExecutor(appContext, this),
                 SearchActionExecutor(webSearch),
+                // Registered before the routine and notification executors only for
+                // readability; every action still has exactly one owner.
+                ConversationActionExecutor(chatClient, memory, webSearch),
                 RoutineActionExecutor(routines, routineScheduler),
                 NotificationActionExecutor(notifications),
                 VisionActionExecutor(screenTextReader),

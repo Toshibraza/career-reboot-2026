@@ -121,6 +121,16 @@ sealed interface NovaAction {
     data class Speak(val text: String) : NovaAction
 
     /**
+     * Answer in conversation rather than by operating the phone.
+     *
+     * Distinct from [Speak], which says a line already decided elsewhere. This one has to work
+     * out what the answer is — from what Raza has been told, from the web, or from the model —
+     * and it remembers the exchange so a follow-up like "what about Germany?" still makes
+     * sense.
+     */
+    data class Converse(val utterance: String) : NovaAction
+
+    /**
      * Nova understood that something was asked but has no capability for it yet.
      * Kept as a first-class action so the UI can log it and the roadmap can be driven by
      * what users actually ask for.

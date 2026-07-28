@@ -316,9 +316,79 @@ class AgentRuntimeTaskTest {
 
     @Test
     fun `without a planner unrecognised commands are declined as before`() = runTest {
+        // Deliberately not a question: "explain quantum computing" is conversation now, and
+        // would be answered rather than declined.
         val response = runtime(planner = null, executor = RecordingExecutor())
-            .handle("explain quantum computing")
+            .handle("wibble the frobnicator sideways")
 
         assertEquals("I can't do that yet.", response.spoken)
+    }
+
+    @Test
+    fun `a memory miss is picked up by conversation`() = runTest {
+        // "What is my parking spot" and "what is the capital of France" are the same sentence
+        // to a rule engine. Memory is asked first and answers what it knows; conversation
+        // takes what it does not.
+        val memory = object : ActionExecutor {
+            override val name = "memory"
+            override fun canHandle(action: NovaAction) = action is NovaAction.Recall
+            override suspend fun execute(action: NovaAction) =
+                ActionResult.Failure("I don't have anything about that.")
+        }
+        val talker = object : ActionExecutor {
+            override val name = "conversation"
+            override fun canHandle(action: NovaAction) = action is NovaAction.Converse
+            override suspend fun execute(action: NovaAction) =
+                ActionResult.Success("Paris is the capital of France.")
+        }
+
+        val response = AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(memory, talker),
+        ).handle("what is the capital of France")
+
+        assertEquals("Paris is the capital of France.", response.spoken)
+    }
+
+    @Test
+    fun `a memory hit is never second-guessed by conversation`() = runTest {
+        val memory = object : ActionExecutor {
+            override val name = "memory"
+            override fun canHandle(action: NovaAction) = action is NovaAction.Recall
+            override suspend fun execute(action: NovaAction) =
+                ActionResult.Success("my parking spot is B4.")
+        }
+        val talker = object : ActionExecutor {
+            override val name = "conversation"
+            override fun canHandle(action: NovaAction) = action is NovaAction.Converse
+            override suspend fun execute(action: NovaAction) =
+                ActionResult.Success("should never be asked")
+        }
+
+        val response = AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(memory, talker),
+        ).handle("what is my parking spot")
+
+        // The user's own words outrank a model's, and asking anyway would cost a round trip
+        // for an answer already in hand.
+        assertEquals("my parking spot is B4.", response.spoken)
+    }
+
+    @Test
+    fun `a memory miss is reported plainly when there is nobody to talk to`() = runTest {
+        val memory = object : ActionExecutor {
+            override val name = "memory"
+            override fun canHandle(action: NovaAction) = action is NovaAction.Recall
+            override suspend fun execute(action: NovaAction) =
+                ActionResult.Failure("I don't have anything about that.")
+        }
+
+        val response = AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(memory),
+        ).handle("what is the capital of France")
+
+        assertEquals("I don't have anything about that.", response.spoken)
     }
 }

@@ -440,9 +440,50 @@ class RuleIntentEngineTest {
 
     @Test
     fun `unknown commands are unsupported with zero confidence`() = runTest {
-        val plan = engine.plan("explain quantum computing to me", AgentContext())
+        // Not a chat opener and not a device command: nothing claims it, so it stays
+        // Unsupported and escalates to the task planner.
+        val plan = engine.plan("wibble the frobnicator sideways", AgentContext())
         assertEquals(0f, plan.confidence, 0.001f)
         assertTrue(plan.actions.single() is NovaAction.Unsupported)
+    }
+
+    @Test
+    fun `asking for an explanation is a conversation`() = runTest {
+        val plan = engine.plan("explain quantum computing to me", AgentContext())
+
+        assertEquals(
+            NovaAction.Converse("explain quantum computing to me"),
+            plan.actions.single(),
+        )
+    }
+
+    @Test
+    fun `conversational openers do not shadow device commands`() = runTest {
+        // The chat rule is registered last precisely so these keep working. "How do I" is a
+        // question; "turn on the flashlight" is not, even though both are things people say
+        // in the same breath.
+        assertTrue(
+            engine.plan("turn on the flashlight", AgentContext()).actions.single()
+                is NovaAction.SetFlashlight,
+        )
+        assertTrue(
+            engine.plan("open youtube", AgentContext()).actions.single()
+                is NovaAction.OpenApp,
+        )
+        assertTrue(
+            engine.plan("how do I get to the bluetooth settings", AgentContext()).actions.single()
+                is NovaAction.Converse,
+        )
+    }
+
+    @Test
+    fun `a question about a stored fact still goes to memory`() = runTest {
+        // Memory must keep first claim on these. Conversation picks up the miss at runtime, so
+        // routing them straight to chat here would make Raza forget it had been told anything.
+        assertTrue(
+            engine.plan("what is my parking spot", AgentContext()).actions.single()
+                is NovaAction.Recall,
+        )
     }
 
     @Test

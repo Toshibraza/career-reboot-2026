@@ -406,6 +406,18 @@ class RuleIntentEngine : IntentEngine {
                 }
                 listOf(NovaAction.Recall(subject))
             },
+
+            // --- Conversation ------------------------------------------------------------
+            // Dead last, so every capability above still wins. This is the "just talk to me"
+            // path: questions and requests for an explanation, which no amount of tapping
+            // around the phone can answer.
+            //
+            // Only shapes that are unmistakably conversational are matched. Anything else that
+            // went unrecognised stays Unsupported and escalates to the task planner, which is
+            // what drives multi-step work like "send Amit a message on WhatsApp". Sending
+            // those here instead would trade a device that does things for one that talks
+            // about doing them.
+            rule("chat", CHAT_OPENERS) { listOf(NovaAction.Converse(it.group(0).trim())) },
         )
 
         /**
@@ -430,6 +442,26 @@ class RuleIntentEngine : IntentEngine {
 
         /** Longer than this and it is a sentence, not something Nova was told to remember. */
         const val MAX_SUBJECT_WORDS = 5
+
+        /**
+         * Utterances that are plainly conversation rather than an instruction.
+         *
+         * "Why", "how" and "should" are here while "what" and "who" are not: those two are
+         * claimed by the recall rule above, and a memory miss falls through to conversation in
+         * [com.nova.core.agent.AgentRuntime] anyway. Catching them here as well would mean
+         * "what is my parking spot" never reached memory at all.
+         *
+         * Kept to openers, never a bare keyword match. "How" anywhere in a sentence would
+         * swallow "set brightness to however bright it goes"; anchored at the start it does
+         * not.
+         */
+        const val CHAT_OPENERS =
+            "^(?:" +
+                "why\\b|how (?:do|does|did|can|could|would|should|is|are|long|many|much)\\b|" +
+                "should i\\b|do you (?:know|think)\\b|what do you think\\b|" +
+                "tell me\\b|explain\\b|describe\\b|define\\b|summarise\\b|summarize\\b|" +
+                "give me\\b" +
+                ").*"
 
         /** Phrases that follow "call" without naming anybody. */
         val AMBIGUOUS_CALL_TARGETS = setOf("back", "again", "them", "him", "her", "someone")

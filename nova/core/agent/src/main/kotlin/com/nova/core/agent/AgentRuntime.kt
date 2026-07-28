@@ -47,7 +47,29 @@ class AgentRuntime(
         }
 
         val results = plan.actions.map { execute(it) }
+
+        // "What is my parking spot" and "what is the capital of France" are the same sentence
+        // to a rule engine, and only memory can tell them apart — by knowing the answer or not.
+        // So memory is asked first and conversation picks up what it does not hold, which
+        // keeps stored facts authoritative without making the user phrase questions two ways.
+        if (plan.actions.singleOrNull() is NovaAction.Recall &&
+            results.singleOrNull() is ActionResult.Failure &&
+            canConverse()
+        ) {
+            return converse(trimmed)
+        }
+
         return AgentResponse(plan, results, summarise(plan, results))
+    }
+
+    private fun canConverse(): Boolean =
+        executors.any { it.canHandle(NovaAction.Converse("")) }
+
+    private suspend fun converse(utterance: String): AgentResponse {
+        val action = NovaAction.Converse(utterance)
+        val result = execute(action)
+        val plan = Plan(utterance = utterance, actions = listOf(action), confidence = 1f)
+        return AgentResponse(plan, listOf(result), summarise(plan, listOf(result)))
     }
 
     /**
