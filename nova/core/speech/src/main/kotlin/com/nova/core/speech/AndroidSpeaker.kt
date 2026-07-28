@@ -22,6 +22,13 @@ class AndroidSpeaker(
     private val locale: Locale = Locale.getDefault(),
     /** Voice chosen by the user, if any. Overrides the heuristic entirely. */
     private val preferredVoiceId: () -> String? = { null },
+    /**
+     * Told what was said, and when, so the microphone can discard hearing it back.
+     *
+     * Recorded here rather than by callers: every route that speaks needs this, and one that
+     * forgot would reintroduce the feedback loop silently.
+     */
+    private val echoGuard: EchoGuard? = null,
 ) : Speaker {
 
     private val ready = CompletableDeferred<Boolean>()
@@ -80,6 +87,10 @@ class AndroidSpeaker(
                 if (!continuation.isCompleted) continuation.resume(Unit)
             }
         }
+
+        // After the wait, not before: the window the guard measures runs from the moment the
+        // sound stopped, which is the moment the room starts echoing it.
+        echoGuard?.spoke(text)
     }
 
     /**

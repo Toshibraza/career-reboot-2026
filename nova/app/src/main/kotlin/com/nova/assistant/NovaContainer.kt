@@ -14,6 +14,7 @@ import com.nova.feature.localllm.LocalChatClient
 import com.nova.feature.localllm.LocalModelStore
 import com.nova.core.speech.AndroidSpeaker
 import com.nova.core.speech.AndroidSpeechToText
+import com.nova.core.speech.EchoGuard
 import com.nova.core.speech.Speaker
 import com.nova.core.speech.SpeechToText
 import com.nova.core.speech.GatedWakeWordDetector
@@ -59,8 +60,20 @@ class NovaContainer(context: Context) {
 
     val voicePreference: VoicePreference by lazy { VoicePreference(appContext) }
 
+    /**
+     * One instance, shared by the mouth and both ears.
+     *
+     * The speaker records what was said; the wake detector and the command capture check
+     * against it. Two instances would mean each ear only knew about speech it had not heard.
+     */
+    val echoGuard: EchoGuard = EchoGuard()
+
     val speaker: Speaker by lazy {
-        AndroidSpeaker(appContext, preferredVoiceId = { voicePreference.current() })
+        AndroidSpeaker(
+            appContext,
+            preferredVoiceId = { voicePreference.current() },
+            echoGuard = echoGuard,
+        )
     }
 
     /**
@@ -68,7 +81,9 @@ class NovaContainer(context: Context) {
      * suggests someone is actually speaking. See [GatedWakeWordDetector] for what this still
      * does not solve.
      */
-    val wakeWordDetector: WakeWordDetector by lazy { GatedWakeWordDetector(speechToText) }
+    val wakeWordDetector: WakeWordDetector by lazy {
+        GatedWakeWordDetector(speechToText, echoGuard = echoGuard)
+    }
 
     private val appRegistry by lazy { AppRegistry(appContext) }
 

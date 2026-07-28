@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
@@ -62,6 +63,12 @@ class NovaListeningService : Service() {
     private suspend fun handleOneCommand() {
         container.speaker.speak("Yes?")
 
+        // The speaker reports "done" when it stops writing audio, not when the room stops
+        // carrying it. Opening the microphone on that same instant is what makes Raza hear its
+        // own prompt. The wake detector already waits this long between microphone handovers;
+        // this path was the one that did not.
+        delay(MIC_SETTLE_MILLIS)
+
         val utterance = container.speechToText.transcribe()
             .mapNotNull { (it as? SpeechEvent.Final)?.text }
             .firstOrNull()
@@ -69,6 +76,13 @@ class NovaListeningService : Service() {
         if (utterance.isNullOrBlank()) {
             Log.i(TAG, "woke, but heard no command")
             container.speaker.speak("I didn't catch that.")
+            return
+        }
+
+        if (container.echoGuard.isEcho(utterance)) {
+            // Not spoken to. Answering would say something new, which would be heard in turn —
+            // the loop this exists to break.
+            Log.i(TAG, "ignored \"$utterance\" — that was Raza hearing itself")
             return
         }
 
@@ -134,6 +148,14 @@ class NovaListeningService : Service() {
         private const val TAG = "NovaWake"
         private const val CHANNEL_ID = "nova-listening"
         private const val NOTIFICATION_ID = 1
+
+        /**
+         * Pause between Raza finishing a line and the microphone opening.
+         *
+         * Matches the handover delay the wake detector already uses. Long enough for a speaker
+         * to fall quiet, short enough that the user is not left waiting after "Yes?".
+         */
+        private const val MIC_SETTLE_MILLIS = 250L
 
         /**
          * Read by the UI to render the toggle. Good enough while exactly one activity and one

@@ -84,6 +84,12 @@ data class ScreenSnapshot(
      * token not spent on reasoning. Only actionable elements and visible text survive, and
      * coordinates are dropped — a planner should name what it wants pressed, not where, so the
      * tap stays label-based and auditable.
+     *
+     * Secrets are masked on the way out. This is the seam where the user's screen becomes text
+     * for a model, so redacting here rather than at the call site means a future planner cannot
+     * skip it by forgetting. It costs nothing for a local model and is the only thing standing
+     * between a one-time code and an API when the cloud planner is in use. Speaking a screen
+     * aloud goes through [spokenSummary] and is left alone — that audio never leaves the room.
      */
     fun toPrompt(maxElements: Int = 40): String {
         val header = buildString {
@@ -105,7 +111,7 @@ data class ScreenSnapshot(
                 "- $kind: ${element.label}$state"
             }
 
-        return (listOf(header) + lines).joinToString("\n")
+        return Redactor.redact((listOf(header) + lines).joinToString("\n"))
     }
 
     private companion object {

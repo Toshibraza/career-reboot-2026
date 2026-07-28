@@ -42,6 +42,12 @@ class GatedWakeWordDetector(
     private val languageTag: String = "en-IN",
     /** Breathing room so one holder has fully released the microphone before the next opens it. */
     private val handoverDelayMillis: Long = 250,
+    /**
+     * Discards a "wake phrase" that is really Raza's own reply coming back.
+     *
+     * Null disables the check, which is only appropriate where nothing is being spoken.
+     */
+    private val echoGuard: EchoGuard? = null,
 ) : WakeWordDetector {
 
     private companion object {
@@ -94,6 +100,7 @@ class GatedWakeWordDetector(
     private suspend fun heardWakePhrase(): Boolean {
         var heard = false
         var lastHeard = ""
+        var echoed = false
 
         speechToText.transcribe(languageTag).collect { event ->
             // Every candidate, not just the winner — the wake word is frequently a runner-up.
@@ -107,8 +114,18 @@ class GatedWakeWordDetector(
                 else -> emptyList()
             }
 
-            candidates.firstOrNull()?.let { lastHeard = it }
+            candidates.firstOrNull()?.let { text ->
+                lastHeard = text
+                if (echoGuard?.isEcho(text) == true) echoed = true
+            }
             if (!heard && candidates.any(::containsWakeWord)) heard = true
+        }
+
+        // Checked after collecting rather than instead of it, so the log still shows what was
+        // heard. Otherwise "it woke itself up" is indistinguishable from "it woke up".
+        if (heard && echoed) {
+            Log.i(TAG, "ignored \"$lastHeard\" — that was Raza hearing itself")
+            return false
         }
 
         // The single most useful line when the wake word "doesn't work": it usually did hear

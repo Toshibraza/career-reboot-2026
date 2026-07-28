@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -71,6 +72,19 @@ class VoiceActivityGate(
             return@flow
         }
 
+        // Cancels Raza's own output at the hardware level, where it can be subtracted from the
+        // signal rather than inferred from the transcript afterwards. [EchoGuard] stays
+        // regardless: this is absent on some devices, weak on others, and does nothing for
+        // sound arriving off a wall a beat late.
+        val canceller = runCatching {
+            if (AcousticEchoCanceler.isAvailable()) {
+                AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true }
+            } else {
+                Log.i(TAG, "no hardware echo canceller on this device")
+                null
+            }
+        }.getOrNull()
+
         val frame = ShortArray(FRAME_SAMPLES)
         var loudFrames = 0
 
@@ -109,6 +123,9 @@ class VoiceActivityGate(
                 }
             }
         } finally {
+            // Before the recorder: the effect is attached to its audio session, and outliving
+            // that session leaks a hardware resource the next open may not get back.
+            runCatching { canceller?.release() }
             runCatching {
                 if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop()
             }
