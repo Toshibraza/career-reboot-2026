@@ -4,4 +4,6 @@
     <string name="listening_channel_name">Always listening</string>
     <string name="listening_notification_title">Raza is listening</string>
     <string name="listening_notification_text">Say \"Raza\" to give a command.</string>
+    <string name="routine_channel_name">Routines</string>
+    <string name="routine_notification_title">Raza is running a routine</string>
 </resources>
