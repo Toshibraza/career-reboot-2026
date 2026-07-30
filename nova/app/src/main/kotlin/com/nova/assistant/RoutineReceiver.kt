@@ -41,7 +41,7 @@ class RoutineReceiver : BroadcastReceiver() {
     }
 
     private fun run(container: NovaContainer, id: String) {
-        scope.launch {
+        val job = scope.launch {
             val routine = container.routines.all().firstOrNull { it.id == id }
             if (routine == null) {
                 Log.i(TAG, "routine $id no longer exists, ignoring")
@@ -68,6 +68,9 @@ class RoutineReceiver : BroadcastReceiver() {
                 -> Unit
             }
         }
+        // A routine acting on the phone must answer to the same stop control as everything
+        // else — firing unattended is exactly when a stop button matters most.
+        container.activeCommands.track(job)
     }
 
     private companion object {

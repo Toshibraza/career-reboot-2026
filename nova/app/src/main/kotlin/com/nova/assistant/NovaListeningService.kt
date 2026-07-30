@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.mapNotNull
@@ -93,9 +94,18 @@ class NovaListeningService : Service() {
         // the difference between catching a mistake and discovering it afterwards.
         container.speaker.speak("You said, $utterance")
 
-        val response = container.runtime.handle(utterance)
-        Log.i(TAG, "-> ${response.spoken}")
-        container.speaker.speak(response.spoken)
+        // The command runs as a child job registered with the container, so the orb's stop
+        // control can cancel it. Cancelling the child ends the command; the wake-word loop
+        // above survives and keeps listening.
+        coroutineScope {
+            val command = launch {
+                val response = container.runtime.handle(utterance)
+                Log.i(TAG, "-> ${response.spoken}")
+                container.speaker.speak(response.spoken)
+            }
+            container.activeCommands.track(command)
+            command.join()
+        }
     }
 
     private fun startForegroundWithNotification() {

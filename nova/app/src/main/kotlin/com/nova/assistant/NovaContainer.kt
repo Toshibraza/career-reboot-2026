@@ -1,6 +1,7 @@
 package com.nova.assistant
 
 import android.content.Context
+import com.nova.core.agent.ActiveCommands
 import com.nova.core.agent.AgentContext
 import com.nova.core.agent.AgentRuntime
 import com.nova.core.agent.SpeakActionExecutor
@@ -127,6 +128,13 @@ class NovaContainer(context: Context) {
     }
 
     val apiKeys: ApiKeyStore by lazy { ApiKeyStore(appContext) }
+
+    /**
+     * Every command currently running, whichever entry point started it: the screen, the
+     * wake word, a routine. The orb's stop action cancels through this, so a task started by
+     * voice is as stoppable as one started by touch.
+     */
+    val activeCommands = ActiveCommands()
 
     /**
      * Web search. Token read per call, so pasting one takes effect on the next command.

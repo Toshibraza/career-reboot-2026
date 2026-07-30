@@ -91,13 +91,16 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
     }
 
     /**
-     * Stops whatever is running.
+     * Stops whatever is running — including a task started by the wake word or a routine.
      *
      * This matters most for a multi-step task: the planner can run for a couple of minutes,
      * tapping and typing in other apps, and until now there was no way to interrupt it. An
      * agent acting on someone's phone with no stop button is a defect, not a missing feature.
+     * Cancelling through the container reaches every entry point's commands, not just the
+     * one this screen started.
      */
     fun cancel() {
+        container.activeCommands.cancelAll()
         commandJob?.cancel()
         commandJob = null
         container.speaker.stop()
@@ -199,6 +202,9 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
             _state.update { it.copy(status = NovaStatus.IDLE) }
             commandJob = null
         }
+        // Registered so the stop control can reach it alongside commands from other entry
+        // points — the wake word, routines — with one call.
+        commandJob?.let { container.activeCommands.track(it) }
     }
 
     /** Only worth showing when several actions ran — a single command speaks for itself. */

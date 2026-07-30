@@ -80,11 +80,13 @@ class PowerReceiver : BroadcastReceiver() {
     }
 
     private fun run(container: NovaContainer, routine: Routine) {
-        scope.launch {
+        val job = scope.launch {
             val response = container.runtime.handle(routine.command)
             Log.i(TAG, "\"${routine.command}\" -> ${response.spoken}")
             container.speaker.speak(response.spoken)
         }
+        // Same stop control as every other entry point.
+        container.activeCommands.track(job)
     }
 
     private companion object {

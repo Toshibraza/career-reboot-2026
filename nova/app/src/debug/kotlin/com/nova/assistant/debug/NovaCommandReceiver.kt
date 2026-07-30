@@ -51,7 +51,7 @@ class NovaCommandReceiver : BroadcastReceiver() {
                 .forEach { Log.w(TAG, "action threw", it) }
 
             container.speaker.speak(response.spoken)
-        }
+        }.also { container.activeCommands.track(it) }
     }
 
     private companion object {
