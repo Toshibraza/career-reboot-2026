@@ -9,6 +9,7 @@ import com.nova.core.agent.task.TaskPlanner
 import com.nova.core.llm.ChatClient
 import com.nova.core.llm.OpenAiClient
 import com.nova.core.llm.RateLimitedChatClient
+import com.nova.core.llm.ResponseSchema
 import com.nova.core.llm.ConversationActionExecutor
 import com.nova.core.llm.LlmTaskPlanner
 import com.nova.feature.localllm.LocalChatClient
@@ -169,11 +170,11 @@ class NovaContainer(context: Context) {
      * choice they made. The failure is reported instead.
      */
     private val chatClient: ChatClient = object : ChatClient {
-        override suspend fun complete(system: String, user: String): String =
+        override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String =
             if (localModels.isInstalled()) {
-                localClient.complete(system, user)
+                localClient.complete(system, user, schema)
             } else {
-                cloudClient.complete(system, user)
+                cloudClient.complete(system, user, schema)
             }
     }
 

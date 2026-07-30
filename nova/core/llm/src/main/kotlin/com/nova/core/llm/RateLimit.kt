@@ -27,7 +27,7 @@ class RateLimitedChatClient(
 
     private val calls = ArrayDeque<Long>()
 
-    override suspend fun complete(system: String, user: String): String {
+    override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String {
         val now = clock()
 
         synchronized(calls) {
@@ -44,7 +44,7 @@ class RateLimitedChatClient(
             calls.addLast(now)
         }
 
-        return delegate.complete(system, user)
+        return delegate.complete(system, user, schema)
     }
 
     /** Calls left in the tighter of the two windows. For diagnostics. */

@@ -15,12 +15,23 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** A structured chat completion, with the reply shape enforced by a JSON schema. */
+/** A structured chat completion. */
 interface ChatClient {
 
-    /** Returns the raw JSON string the model produced. */
-    suspend fun complete(system: String, user: String): String
+    /**
+     * Returns the model's reply as a raw string.
+     *
+     * [schema] constrains the reply's shape where the transport supports it. Null means free
+     * text. The schema travels with the request rather than living in the client, because the
+     * same client serves callers with different expectations — the task planner needs one JSON
+     * object, conversation needs a spoken sentence — and a transport that hardcodes one
+     * caller's schema silently corrupts the other's replies.
+     */
+    suspend fun complete(system: String, user: String, schema: ResponseSchema? = null): String
 }
+
+/** A JSON Schema the reply must conform to, with the name the API labels it by. */
+data class ResponseSchema(val name: String, val json: String)
 
 /**
  * The request reached the API and came back an error.
@@ -60,12 +71,12 @@ class OpenAiClient(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun complete(system: String, user: String): String =
+    override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String =
         withContext(Dispatchers.IO) {
             val key = apiKey().trim()
             if (key.isEmpty()) throw MissingApiKeyException()
 
-            val body = requestBody(system, user).toString()
+            val body = requestBody(system, user, schema).toString()
             val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
@@ -94,36 +105,39 @@ class OpenAiClient(
             }
         }
 
-    private fun requestBody(system: String, user: String): JsonObject = buildJsonObject {
-        put("model", model)
-        // Planning a phone action is not a place for creative variation.
-        put("temperature", 0)
-        putJsonObject("response_format") {
-            put("type", "json_schema")
-            putJsonObject("json_schema") {
-                put("name", "planner_decision")
-                put("strict", true)
-                put("schema", json.parseToJsonElement(TaskPrompt.RESPONSE_SCHEMA))
+    private fun requestBody(system: String, user: String, schema: ResponseSchema?): JsonObject =
+        buildJsonObject {
+            put("model", model)
+            // Planning a phone action is not a place for creative variation.
+            put("temperature", 0)
+            if (schema != null) {
+                putJsonObject("response_format") {
+                    put("type", "json_schema")
+                    putJsonObject("json_schema") {
+                        put("name", schema.name)
+                        put("strict", true)
+                        put("schema", json.parseToJsonElement(schema.json))
+                    }
+                }
             }
+            put(
+                "messages",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("role", "system")
+                            put("content", system)
+                        },
+                    )
+                    add(
+                        buildJsonObject {
+                            put("role", "user")
+                            put("content", user)
+                        },
+                    )
+                },
+            )
         }
-        put(
-            "messages",
-            buildJsonArray {
-                add(
-                    buildJsonObject {
-                        put("role", "system")
-                        put("content", system)
-                    },
-                )
-                add(
-                    buildJsonObject {
-                        put("role", "user")
-                        put("content", user)
-                    },
-                )
-            },
-        )
-    }
 
     private fun extractContent(response: String): String =
         json.parseToJsonElement(response)

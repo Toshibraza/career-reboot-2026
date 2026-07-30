@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.nova.core.llm.ChatClient
 import com.nova.core.llm.ModelUnavailableException
+import com.nova.core.llm.ResponseSchema
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -39,11 +40,14 @@ class LocalChatClient(
     @Volatile
     private var engine: LlmInference? = null
 
-    override suspend fun complete(system: String, user: String): String =
+    // The schema is accepted but not enforced: MediaPipe's inference API has no constrained
+    // decoding. Callers already parse defensively (TaskPrompt.parse extracts the first JSON
+    // object), so a best-effort reply is the honest contract here.
+    override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String =
         withContext(Dispatchers.Default) {
             lock.withLock {
                 val inference = engine ?: load()
-                val prompt = "$system\n\n$user\n\nJSON:"
+                val prompt = if (schema != null) "$system\n\n$user\n\nJSON:" else "$system\n\n$user"
 
                 // Whether the planner could see the screen decides whether a repeated action
                 // is the model ignoring feedback or the model never receiving any. Logs the

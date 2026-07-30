@@ -18,18 +18,20 @@ class ConversationActionExecutorTest {
     private class ScriptedChat(private vararg val replies: String) : ChatClient {
         val systems = mutableListOf<String>()
         val users = mutableListOf<String>()
+        val schemas = mutableListOf<ResponseSchema?>()
         var calls = 0
             private set
 
-        override suspend fun complete(system: String, user: String): String {
+        override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String {
             systems += system
             users += user
+            schemas += schema
             return replies.getOrElse(calls++) { "" }
         }
     }
 
     private class FailingChat(private val cause: Throwable) : ChatClient {
-        override suspend fun complete(system: String, user: String): String = throw cause
+        override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String = throw cause
     }
 
     private class FakeMemory(private val entries: List<MemoryEntry> = emptyList()) : Memory {
@@ -69,6 +71,18 @@ class ConversationActionExecutorTest {
 
         assertEquals(1, chat.calls)
         assertEquals("Paris is the capital of France.", (result as ActionResult.Success).spoken)
+    }
+
+    @Test
+    fun `conversation asks for free text, not the planner's JSON`() {
+        // The regression this guards: a transport that attached the planner's response schema
+        // to every request forced conversation replies into {"decision":...} JSON, which was
+        // then spoken aloud verbatim.
+        val chat = ScriptedChat("Paris.")
+
+        answer(chat)
+
+        assertEquals(listOf(null), chat.schemas)
     }
 
     @Test

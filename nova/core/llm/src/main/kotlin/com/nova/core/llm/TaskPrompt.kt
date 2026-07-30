@@ -35,6 +35,9 @@ object TaskPrompt {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /** The planner's reply contract, passed with each planning request. */
+    fun responseSchema(): ResponseSchema = ResponseSchema("planner_decision", RESPONSE_SCHEMA)
+
     /** JSON Schema handed to the model, so the reply shape is enforced rather than requested. */
     const val RESPONSE_SCHEMA: String = """
 {

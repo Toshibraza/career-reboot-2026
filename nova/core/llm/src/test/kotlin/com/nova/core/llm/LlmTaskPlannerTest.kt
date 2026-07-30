@@ -11,7 +11,7 @@ class LlmTaskPlannerTest {
 
     private fun plannerThatFailsWith(failure: Throwable) = LlmTaskPlanner(
         object : ChatClient {
-            override suspend fun complete(system: String, user: String): String = throw failure
+            override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String = throw failure
         },
     )
 
@@ -51,7 +51,7 @@ class LlmTaskPlannerTest {
     fun `a good reply becomes an action`() = runTest {
         val planner = LlmTaskPlanner(
             object : ChatClient {
-                override suspend fun complete(system: String, user: String): String =
+                override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String =
                     """{"decision":"act","action":"open_app","argument":"Settings","message":"","rationale":""}"""
             },
         )
@@ -59,5 +59,24 @@ class LlmTaskPlannerTest {
             PlannerDecision.Act(NovaAction.OpenApp("Settings"), null),
             planner.next("open settings", null, emptyList()),
         )
+    }
+
+    @Test
+    fun `planning requests carry the planner schema`() = runTest {
+        // Conversation must not get this schema, and the planner must never lose it — a cloud
+        // model without it can reply in prose the parser then refuses.
+        var seen: ResponseSchema? = null
+        val planner = LlmTaskPlanner(
+            object : ChatClient {
+                override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String {
+                    seen = schema
+                    return """{"decision":"finish","action":"none","argument":"","message":"Done.","rationale":""}"""
+                }
+            },
+        )
+
+        planner.next("open settings", null, emptyList())
+
+        assertEquals("planner_decision", seen?.name)
     }
 }

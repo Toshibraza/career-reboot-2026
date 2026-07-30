@@ -12,7 +12,7 @@ class RateLimitedChatClientTest {
     private var calls = 0
 
     private val counting = object : ChatClient {
-        override suspend fun complete(system: String, user: String): String {
+        override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String {
             calls++
             return "ok"
         }
@@ -64,7 +64,7 @@ class RateLimitedChatClientTest {
         // Otherwise a request that always fails could be retried forever for free, which is
         // precisely the runaway this guards against.
         val failing = object : ChatClient {
-            override suspend fun complete(system: String, user: String): String =
+            override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String =
                 throw RuntimeException("boom")
         }
         val client = RateLimitedChatClient(failing, perHour = 2, perDay = 9) { now }

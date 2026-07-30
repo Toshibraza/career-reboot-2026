@@ -26,6 +26,7 @@ class LlmTaskPlanner(
             client.complete(
                 system = TaskPrompt.systemPrompt(),
                 user = TaskPrompt.userPrompt(goal, screen, history),
+                schema = TaskPrompt.responseSchema(),
             )
         }.getOrElse { failure ->
             // The step cap should not spend its budget retrying a dead connection, a rejected

@@ -17,17 +17,21 @@ data class Turn(val user: String, val raza: String)
  */
 class Transcript(private val capacity: Int = DEFAULT_CAPACITY) {
 
+    // Shared between whichever entry point is conversing — screen, wake word, or a routine —
+    // so reads and writes are guarded.
     private val turns = ArrayDeque<Turn>()
 
     fun record(user: String, raza: String) {
         if (user.isBlank() || raza.isBlank()) return
-        turns.addLast(Turn(user, raza))
-        while (turns.size > capacity) turns.removeFirst()
+        synchronized(turns) {
+            turns.addLast(Turn(user, raza))
+            while (turns.size > capacity) turns.removeFirst()
+        }
     }
 
-    fun recent(): List<Turn> = turns.toList()
+    fun recent(): List<Turn> = synchronized(turns) { turns.toList() }
 
-    fun clear() = turns.clear()
+    fun clear() = synchronized(turns) { turns.clear() }
 
     private companion object {
         /**
