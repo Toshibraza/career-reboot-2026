@@ -39,24 +39,30 @@ class ConfirmationSlot(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
+    // Reached from several threads: the UI's viewModelScope, the listening service, and the
+    // routine receivers all share one slot. Guarded so an offer and a take cannot race.
+    private val lock = Any()
+
     private var pending: PendingAction? = null
 
     fun offer(action: PendingAction) {
-        pending = action
+        synchronized(lock) { pending = action }
     }
 
     /** The live proposal, or null when there is none or it has gone stale. */
-    fun take(): PendingAction? {
+    fun take(): PendingAction? = synchronized(lock) {
         val current = pending ?: return null
         pending = null
 
-        return if (clock() - current.createdAt > expiryMillis) null else current
+        if (clock() - current.createdAt > expiryMillis) null else current
     }
 
-    fun peek(): PendingAction? = pending?.takeIf { clock() - it.createdAt <= expiryMillis }
+    fun peek(): PendingAction? = synchronized(lock) {
+        pending?.takeIf { clock() - it.createdAt <= expiryMillis }
+    }
 
     fun clear() {
-        pending = null
+        synchronized(lock) { pending = null }
     }
 
     companion object {

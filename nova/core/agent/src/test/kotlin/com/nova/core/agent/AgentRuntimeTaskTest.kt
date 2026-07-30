@@ -7,6 +7,7 @@ import com.nova.core.agent.screen.ScreenSnapshot
 import com.nova.core.agent.task.PlannerDecision
 import com.nova.core.agent.task.StepRecord
 import com.nova.core.agent.task.TaskPlanner
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -390,5 +391,49 @@ class AgentRuntimeTaskTest {
         ).handle("what is the capital of France")
 
         assertEquals("I don't have anything about that.", response.spoken)
+    }
+
+    @Test
+    fun `concurrent commands never interleave their steps`() = runTest {
+        // Five entry points share one runtime — screen, wake word, routines, power triggers,
+        // debug — and a routine alarm can fire mid multi-step task. Interleaved taps on a live
+        // screen are the failure this guards against.
+        val planner = object : TaskPlanner {
+            override suspend fun next(
+                goal: String,
+                screen: ScreenSnapshot?,
+                history: List<StepRecord>,
+            ): PlannerDecision =
+                if (history.size >= 2) {
+                    PlannerDecision.Finished("Done.")
+                } else {
+                    PlannerDecision.Act(NovaAction.TapLabel("$goal step ${history.size}"))
+                }
+        }
+
+        val executed = mutableListOf<String>()
+        val executor = object : ActionExecutor {
+            override val name = "recording"
+            override fun canHandle(action: NovaAction) = action is NovaAction.TapLabel
+            override suspend fun execute(action: NovaAction): ActionResult {
+                executed += (action as NovaAction.TapLabel).label
+                kotlinx.coroutines.yield() // Give the other command every chance to barge in.
+                return ActionResult.Success("ok")
+            }
+        }
+
+        val runtime = AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(executor),
+            taskPlanner = planner,
+        )
+
+        val first = async { runtime.handle("alpha zzz unparseable") }
+        val second = async { runtime.handle("beta zzz unparseable") }
+        first.await()
+        second.await()
+
+        // All of one task's steps, then all of the other's.
+        assertEquals(listOf("alpha", "alpha", "beta", "beta"), executed.map { it.substringBefore(' ') })
     }
 }

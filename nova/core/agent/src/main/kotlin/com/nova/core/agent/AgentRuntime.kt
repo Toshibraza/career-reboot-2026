@@ -7,6 +7,8 @@ import com.nova.core.agent.screen.ScreenSnapshot
 import com.nova.core.agent.task.PlannerDecision
 import com.nova.core.agent.task.StepRecord
 import com.nova.core.agent.task.TaskPlanner
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * The loop: utterance in, plan, execute, one spoken line out.
@@ -32,7 +34,18 @@ class AgentRuntime(
     private val guard: ActionGuard = ActionGuard(),
 ) {
 
-    suspend fun handle(utterance: String): AgentResponse {
+    /**
+     * One command at a time, whoever asked.
+     *
+     * Five entry points share this runtime — the screen, the wake word, routines, power
+     * triggers, and the debug receiver — and none of them know about the others. Without this
+     * lock a routine alarm firing mid multi-step task would interleave its taps with the
+     * task's on whatever app is open. Cancellation still works: cancelling a caller's
+     * coroutine releases its place in the queue.
+     */
+    private val oneCommand = Mutex()
+
+    suspend fun handle(utterance: String): AgentResponse = oneCommand.withLock {
         val trimmed = utterance.trim()
         if (trimmed.isEmpty()) {
             val plan = Plan.unsupported(utterance, "Empty utterance.")
