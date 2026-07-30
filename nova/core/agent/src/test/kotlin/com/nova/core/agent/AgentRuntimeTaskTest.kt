@@ -96,19 +96,21 @@ class AgentRuntimeTaskTest {
 
     @Test
     fun `each step sees the outcome of the last`() = runTest {
+        // "Next" rather than "Send": a Send tap without a sending goal is now refused by the
+        // guard, and this test is about history reaching the planner, not about the guard.
         val planner = ScriptedPlanner(
             listOf(
-                PlannerDecision.Act(NovaAction.TapLabel("Send")),
+                PlannerDecision.Act(NovaAction.TapLabel("Next")),
                 PlannerDecision.Finished("Done."),
             ),
         )
-        val executor = RecordingExecutor { ActionResult.Failure("I couldn't find Send on screen.") }
+        val executor = RecordingExecutor { ActionResult.Failure("I couldn't find Next on screen.") }
 
         runtime(planner, executor).handle("do the thing")
 
         assertEquals(emptyList<StepRecord>(), planner.seenHistory[0])
         val afterFirstStep = planner.seenHistory[1].single()
-        assertEquals("I couldn't find Send on screen.", afterFirstStep.outcome)
+        assertEquals("I couldn't find Next on screen.", afterFirstStep.outcome)
         assertTrue(!afterFirstStep.succeeded)
     }
 
@@ -313,6 +315,37 @@ class AgentRuntimeTaskTest {
 
         assertEquals(listOf(NovaAction.TapLabel("Search")), executor.executed)
         assertEquals("There you go.", response.spoken)
+    }
+
+    @Test
+    fun `the guard judges the screen at tap time, not the one the planner saw`() = runTest {
+        // The race this closes: the planner reads a harmless screen, thinks for many seconds,
+        // and by the time its tap lands the phone is showing a payment app — an earlier step
+        // opened it, or a notification was tapped. The stale snapshot said "allow".
+        val youtube = ScreenSnapshot("com.google.android.youtube", "YouTube", emptyList())
+        val paytm = ScreenSnapshot("net.one97.paytm", "Paytm", emptyList())
+
+        // First read (given to the planner): YouTube. Second read (the guard's re-check,
+        // taken just before the tap): Paytm.
+        val screens = ArrayDeque(listOf(youtube, paytm))
+        val planner = ScriptedPlanner(
+            listOf(
+                PlannerDecision.Act(NovaAction.TapLabel("OK")),
+                PlannerDecision.Finished("Done."),
+            ),
+        )
+        val executor = RecordingExecutor()
+
+        val response = AgentRuntime(
+            intentEngine = RuleIntentEngine(),
+            executors = listOf(executor),
+            contextProvider = { AgentContext(screenProvider = { screens.removeFirstOrNull() ?: paytm }) },
+            taskPlanner = planner,
+        ).handle("dismiss that popup")
+
+        // The tap never landed: the guard saw Paytm, not the YouTube snapshot the planner had.
+        assertEquals(emptyList<NovaAction>(), executor.executed)
+        assertTrue(response.spoken, "Paytm" in response.spoken)
     }
 
     @Test

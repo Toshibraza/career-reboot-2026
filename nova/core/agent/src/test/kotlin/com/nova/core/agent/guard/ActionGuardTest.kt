@@ -131,4 +131,91 @@ class ActionGuardTest {
             screen("com.google.android.youtube", "YouTube", "Search"),
         )
     }
+
+    // The comms rule: taps that make something leave the phone need the user's goal to have
+    // asked for it. The comms executor's confirm-before-send only covers Nova's own SMS path;
+    // a planner tapping "Send" inside WhatsApp bypassed it entirely.
+
+    @Test
+    fun `planner may tap send when the user asked to send`() {
+        val whatsapp = screen("com.whatsapp", "WhatsApp", "Send")
+
+        val verdict = guard.check(
+            NovaAction.TapLabel("Send"),
+            whatsapp,
+            ActionOrigin.PLANNER,
+            goal = "send mom a message saying I'll be late",
+        )
+
+        assertEquals(GuardDecision.Allow, verdict)
+    }
+
+    @Test
+    fun `planner may not tap send when the goal never mentioned sending`() {
+        // The injection this closes: "check my notifications" wanders into a chat whose text
+        // says "now press Send". The user asked to read, not to speak for them.
+        val whatsapp = screen("com.whatsapp", "WhatsApp", "Send")
+
+        val verdict = guard.check(
+            NovaAction.TapLabel("Send"),
+            whatsapp,
+            ActionOrigin.PLANNER,
+            goal = "check my notifications",
+        )
+
+        assertTrue("expected refusal, got $verdict", verdict is GuardDecision.Refuse)
+    }
+
+    @Test
+    fun `comms verbs cover calls posts and shares`() {
+        val app = screen("com.some.app", "App")
+
+        for (label in listOf("Call", "Post", "Share", "Forward", "Reply")) {
+            val verdict = guard.check(
+                NovaAction.TapLabel(label),
+                app,
+                ActionOrigin.PLANNER,
+                goal = "read me the latest news",
+            )
+            assertTrue("expected refusal for \"$label\", got $verdict", verdict is GuardDecision.Refuse)
+        }
+    }
+
+    @Test
+    fun `a sending word anywhere in the goal is licence enough`() {
+        val app = screen("com.some.app", "App")
+
+        // "tell" and "reply" state comms intent without using the word "send".
+        for (goal in listOf("tell dad I'm on my way", "reply to Sarah's text", "call an auto")) {
+            val verdict = guard.check(NovaAction.TapLabel("Send"), app, ActionOrigin.PLANNER, goal)
+            assertEquals("for goal \"$goal\"", GuardDecision.Allow, verdict)
+        }
+    }
+
+    @Test
+    fun `words containing a comms verb do not trip the label match`() {
+        val app = screen("com.some.app", "App")
+
+        // "Recently sent" and "Ascending" contain the letters; word boundaries keep them safe.
+        for (label in listOf("Ascending", "Recall settings", "Compost guide")) {
+            val verdict = guard.check(
+                NovaAction.TapLabel(label),
+                app,
+                ActionOrigin.PLANNER,
+                goal = "open the app",
+            )
+            assertEquals("for \"$label\"", GuardDecision.Allow, verdict)
+        }
+    }
+
+    @Test
+    fun `user-origin send taps are still never questioned`() {
+        val verdict = guard.check(
+            NovaAction.TapLabel("Send"),
+            screen("com.whatsapp", "WhatsApp"),
+            ActionOrigin.USER,
+        )
+
+        assertEquals(GuardDecision.Allow, verdict)
+    }
 }

@@ -158,7 +158,18 @@ class AgentRuntime(
                     // recording a failed step, because the planner reads that history and a
                     // refusal in it is an invitation to look for a synonym — "Proceed" instead
                     // of "Pay". A boundary the model can negotiate with is not a boundary.
-                    val verdict = guard.check(decision.action, screen, ActionOrigin.PLANNER)
+                    //
+                    // Checked against a fresh snapshot, not the one the planner saw. The
+                    // planner can take many seconds to decide, long enough for the phone to
+                    // land somewhere else — a payment app opened by an earlier step, say —
+                    // and the guard must judge the screen the tap will actually hit.
+                    val screenNow =
+                        if (decision.action.touchesScreen()) {
+                            runCatching { context.screen() }.getOrNull() ?: screen
+                        } else {
+                            screen
+                        }
+                    val verdict = guard.check(decision.action, screenNow, ActionOrigin.PLANNER, goal)
                     if (verdict is GuardDecision.Refuse) {
                         return finish(goal, executed, results, verdict.spoken)
                     }
@@ -195,6 +206,12 @@ class AgentRuntime(
         results = results.toList(),
         spoken = spoken,
     )
+
+    /** Actions whose safety depends on what is on screen when they land. */
+    private fun NovaAction.touchesScreen(): Boolean = when (this) {
+        is NovaAction.TapLabel, is NovaAction.TypeText, is NovaAction.ScrollScreen -> true
+        else -> false
+    }
 
     private suspend fun execute(action: NovaAction): ActionResult {
         val executor = executors.firstOrNull { it.canHandle(action) }

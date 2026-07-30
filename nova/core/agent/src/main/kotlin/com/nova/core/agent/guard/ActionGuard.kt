@@ -37,9 +37,15 @@ sealed interface GuardDecision {
 class ActionGuard(
     private val guardedApps: List<Regex> = GUARDED_APPS,
     private val guardedLabels: List<Regex> = GUARDED_LABELS,
+    private val commsLabels: List<Regex> = COMMS_LABELS,
 ) {
 
-    fun check(action: NovaAction, screen: ScreenSnapshot?, origin: ActionOrigin): GuardDecision {
+    fun check(
+        action: NovaAction,
+        screen: ScreenSnapshot?,
+        origin: ActionOrigin,
+        goal: String = "",
+    ): GuardDecision {
         if (origin == ActionOrigin.USER) return GuardDecision.Allow
 
         val app = screen?.packageName.orEmpty()
@@ -62,6 +68,23 @@ class ActionGuard(
                 "I won't press \"$target\" by myself — that looks like it moves money or " +
                     "deletes something. Ask me directly if you want it.",
             )
+        }
+
+        // A message leaving the phone is as irreversible as a payment, and the comms
+        // executor's confirm-before-send does not cover a planner tapping "Send" inside
+        // another app. The user's own words are the licence: "send mom a message" makes a
+        // Send tap their intent, while a Send tap during "check my notifications" means the
+        // planner picked up an instruction from somewhere else — a screen, a message, an
+        // attacker.
+        if (target != null && commsLabels.any { it.containsMatchIn(target.lowercase()) }) {
+            val stated = goal.lowercase()
+            val userAskedForComms = COMMS_INTENT_WORDS.any { stated.contains(it) }
+            if (!userAskedForComms) {
+                return GuardDecision.Refuse(
+                    "I won't press \"$target\" by myself — you didn't ask me to send or share " +
+                        "anything. Ask me directly if you want it.",
+                )
+            }
         }
 
         return GuardDecision.Allow
@@ -108,5 +131,29 @@ class ActionGuard(
             "\\bfactory reset\\b", "\\berase\\b", "\\buninstall\\b", "\\bsign out\\b",
             "\\blog out\\b", "\\bremove account\\b", "\\bgrant\\b", "\\ballow\\b",
         ).map { Regex(it) }
+
+        /**
+         * Controls that make something leave the phone — a message, a post, a call.
+         *
+         * Guarded conditionally rather than absolutely: pressing Send is the whole point of
+         * "send mom a message", so these only need the user's goal to have asked for it.
+         */
+        val COMMS_LABELS: List<Regex> = listOf(
+            "\\bsend\\b", "\\bcall\\b", "\\bdial\\b", "\\breply\\b", "\\bpost\\b",
+            "\\bshare\\b", "\\bforward\\b", "\\btweet\\b", "\\bpublish\\b",
+        ).map { Regex(it) }
+
+        /**
+         * Words in a goal that state a communication intent.
+         *
+         * Substring matched on purpose — "messaging", "calling" and "texts" should all count.
+         * Same honest limitation as the label lists: English only, matching the planner's
+         * prompt language.
+         */
+        val COMMS_INTENT_WORDS: List<String> = listOf(
+            "send", "text", "message", "sms", "whatsapp", "telegram", "call", "dial",
+            "reply", "respond", "post", "share", "forward", "tweet", "publish",
+            "tell", "email", "mail",
+        )
     }
 }
