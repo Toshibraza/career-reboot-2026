@@ -11,7 +11,10 @@ import com.nova.core.agent.NovaAction
 import com.nova.core.agent.diagnostics.Check
 import com.nova.core.agent.diagnostics.CheckStatus
 import com.nova.core.agent.diagnostics.DiagnosticReport
+import com.nova.core.agent.memory.Memory
+import com.nova.core.agent.routine.RoutineStore
 import com.nova.feature.accessibility.NovaAccessibilityService
+import com.nova.feature.localllm.LocalModelStore
 import com.nova.feature.localllm.ModelStatus
 import com.nova.feature.notifications.NovaNotificationListener
 
@@ -24,10 +27,17 @@ import com.nova.feature.notifications.NovaNotificationListener
  * every problem in this project was diagnosed that way.
  *
  * Lives in the app module because it is the only place that can see all of those at once.
+ *
+ * Takes the four stores it reports on, not the container that owns everything. An executor
+ * holding the container can reach the runtime that is executing it — a cycle in which "what
+ * can this code touch" has no answer smaller than "everything".
  */
 class DiagnosticsActionExecutor(
     context: Context,
-    private val container: NovaContainer,
+    private val localModels: LocalModelStore,
+    private val apiKeys: ApiKeyStore,
+    private val memory: Memory,
+    private val routines: RoutineStore,
 ) : ActionExecutor {
 
     private val appContext = context.applicationContext
@@ -92,8 +102,8 @@ class DiagnosticsActionExecutor(
      * key at all, so nagging about a missing planner would be wrong.
      */
     private fun planner(): Check {
-        val model = container.localModels.status()
-        val hasKey = container.apiKeys.hasKey()
+        val model = localModels.status()
+        val hasKey = apiKeys.hasKey()
 
         return when {
             model is ModelStatus.Ready -> Check(
@@ -127,7 +137,7 @@ class DiagnosticsActionExecutor(
     private suspend fun stored() = Check(
         name = "Stored",
         status = CheckStatus.OPTIONAL,
-        detail = "${container.memory.all().size} memories, ${container.routines.all().size} routines",
+        detail = "${memory.all().size} memories, ${routines.all().size} routines",
     )
 
     private fun check(name: String, granted: Boolean, problem: String) = Check(

@@ -199,7 +199,7 @@ class NovaContainer(context: Context) {
                 DeviceActionExecutor(deviceController, appRegistry),
                 AccessibilityActionExecutor(screenReader),
                 MemoryActionExecutor(memory),
-                DiagnosticsActionExecutor(appContext, this),
+                DiagnosticsActionExecutor(appContext, localModels, apiKeys, memory, routines),
                 SearchActionExecutor(webSearch),
                 // Registered before the routine and notification executors only for
                 // readability; every action still has exactly one owner.
