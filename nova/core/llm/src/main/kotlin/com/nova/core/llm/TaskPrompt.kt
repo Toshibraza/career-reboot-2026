@@ -35,11 +35,24 @@ object TaskPrompt {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /**
+     * Every action the planner may choose, in one place.
+     *
+     * The same vocabulary appears three times — the JSON schema's enum, the system prompt's
+     * instructions, and the parser's mapping — and they used to be three hand-maintained
+     * lists. Adding an action to one and forgetting another produced the worst kind of bug:
+     * a model told about an action the parser then rejects as malformed. All three now
+     * derive from this list, and a test holds them together.
+     */
+    internal val PLANNER_ACTIONS: List<String> = listOf(
+        "open_app", "tap", "type", "scroll_down", "scroll_up", "back", "home", "none",
+    )
+
     /** The planner's reply contract, passed with each planning request. */
     fun responseSchema(): ResponseSchema = ResponseSchema("planner_decision", RESPONSE_SCHEMA)
 
     /** JSON Schema handed to the model, so the reply shape is enforced rather than requested. */
-    const val RESPONSE_SCHEMA: String = """
+    val RESPONSE_SCHEMA: String = """
 {
   "type": "object",
   "additionalProperties": false,
@@ -48,7 +61,7 @@ object TaskPrompt {
     "decision": { "type": "string", "enum": ["act", "finish", "blocked"] },
     "action": {
       "type": "string",
-      "enum": ["open_app", "tap", "type", "scroll_down", "scroll_up", "back", "home", "none"]
+      "enum": [${PLANNER_ACTIONS.joinToString(", ") { "\"$it\"" }}]
     },
     "argument": { "type": "string" },
     "message": { "type": "string" },
@@ -87,8 +100,7 @@ object TaskPrompt {
         decision, action, argument, message, rationale.
 
         "decision" must be exactly one of these words: act, finish, blocked
-        "action" must be exactly one of these words: open_app, tap, type, scroll_down,
-        scroll_up, back, home, none
+        "action" must be exactly one of these words: ${PLANNER_ACTIONS.joinToString(", ")}
 
         Choose one word. Never write several separated by "|".
 
@@ -199,7 +211,8 @@ object TaskPrompt {
 
     private fun PlannerReply.toAction(): NovaAction? = when (action.lowercase()) {
         // An action that needs an argument and did not get one is a malformed reply, not an
-        // instruction to tap something blank.
+        // instruction to tap something blank. Cases must cover PLANNER_ACTIONS exactly — a
+        // test compares the two.
         "open_app" -> argument.takeIf { it.isNotBlank() }?.let { NovaAction.OpenApp(it) }
         "tap" -> argument.takeIf { it.isNotBlank() }?.let { NovaAction.TapLabel(it) }
         "type" -> argument.takeIf { it.isNotBlank() }?.let { NovaAction.TypeText(it) }

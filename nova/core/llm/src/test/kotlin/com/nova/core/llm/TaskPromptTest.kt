@@ -183,4 +183,44 @@ class TaskPromptTest {
         assertTrue("Never invent one." in system)
         assertTrue("destructive" in system)
     }
+
+    // --- Vocabulary drift ----------------------------------------------------------------
+
+    @Test
+    fun `schema and system prompt advertise exactly the actions the parser accepts`() {
+        // The vocabulary lives in three places: the schema's enum, the prompt's instructions,
+        // and the parser. A word in one but not another means the model is promised an action
+        // that comes back "blocked", or offered fewer than it really has.
+        val system = TaskPrompt.systemPrompt()
+
+        for (action in TaskPrompt.PLANNER_ACTIONS) {
+            assertTrue("schema is missing \"$action\"", "\"$action\"" in TaskPrompt.RESPONSE_SCHEMA)
+            assertTrue("system prompt never mentions \"$action\"", action in system)
+        }
+    }
+
+    @Test
+    fun `every advertised action parses to a decision, not a malformed-reply block`() {
+        // "none" is the finish/blocked placeholder; every other advertised action must map to
+        // a real NovaAction when given a plausible argument.
+        for (action in TaskPrompt.PLANNER_ACTIONS.filterNot { it == "none" }) {
+            val decision = TaskPrompt.parse(
+                """{"decision":"act","action":"$action","argument":"Something","message":"","rationale":""}""",
+            )
+            assertTrue(
+                "\"$action\" is advertised but parses to $decision",
+                decision is PlannerDecision.Act,
+            )
+        }
+    }
+
+    @Test
+    fun `the parser accepts nothing outside the advertised vocabulary`() {
+        // The other direction of drift: a parser case added without advertising it would work
+        // in tests and never be chosen by a schema-constrained model.
+        val decision = TaskPrompt.parse(
+            """{"decision":"act","action":"long_press","argument":"Send","message":"","rationale":""}""",
+        )
+        assertTrue(decision is PlannerDecision.Blocked)
+    }
 }
