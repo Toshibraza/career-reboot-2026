@@ -53,6 +53,25 @@ class FuzzyMatcherTest {
         assertEquals("Paytm", app("paytm"))
     }
 
+    @Test
+    fun `declines when two candidates are too close to call`() {
+        // Regression: a tie used to be settled by list order. "mail" scores Gmail and Email
+        // identically, so whichever the package manager listed first won the launch.
+        val installed = apps + "Email"
+        assertNull(FuzzyMatcher.best("mail", installed) { it })
+
+        // Saying a full label exactly is never ambiguous, even with a close relative present.
+        assertEquals("Gmail", FuzzyMatcher.best("gmail", installed) { it })
+        assertEquals("Email", FuzzyMatcher.best("email", installed) { it })
+    }
+
+    @Test
+    fun `a clear winner still wins over a plausible runner-up`() {
+        // The margin must reject coin-flips without demanding a unique candidate.
+        assertEquals("Google Home", app("google home"))
+        assertEquals("Mi Video", app("video"))
+    }
+
     // --- On-screen labels, the accessibility use case ---------------------------------
 
     @Test

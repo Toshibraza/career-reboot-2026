@@ -17,6 +17,18 @@ object FuzzyMatcher {
     const val MIN_SCORE = 45
 
     /**
+     * How clearly the winner must beat the runner-up before it counts as a match.
+     *
+     * A tie used to be decided by list order — "open paytm" on a phone with Paytm and
+     * Paytm Money installed launched whichever the package manager listed first, and the
+     * same coin-flip applied to tapping between two near-identical buttons. Declining an
+     * ambiguous match costs the user one clarifying sentence; guessing wrong costs a tap
+     * on the wrong control. An exact match is exempt: saying the label in full is as
+     * unambiguous as speech gets.
+     */
+    const val AMBIGUITY_MARGIN = 10
+
+    /**
      * Substring matches need this many characters to count.
      *
      * Without it, an app literally named "X" scores against every query containing an x, so
@@ -31,11 +43,20 @@ object FuzzyMatcher {
         val needle = normalise(query)
         if (needle.isEmpty()) return null
 
-        return candidates
+        val ranked = candidates
             .map { it to score(needle, normalise(label(it))) }
             .filter { it.second >= MIN_SCORE }
-            .maxByOrNull { it.second }
-            ?.first
+            .sortedByDescending { it.second }
+
+        val top = ranked.firstOrNull() ?: return null
+        if (top.second == 100) return top.first
+
+        // Close scores mean the transcript does not decide between them, and neither should
+        // list order.
+        val runnerUp = ranked.getOrNull(1)
+        if (runnerUp != null && top.second - runnerUp.second < AMBIGUITY_MARGIN) return null
+
+        return top.first
     }
 
     /** [needle] and [hay] must already be normalised. */
