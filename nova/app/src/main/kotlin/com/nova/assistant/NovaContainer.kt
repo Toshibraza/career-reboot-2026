@@ -39,6 +39,9 @@ import com.nova.core.agent.screen.ScreenReader
 import com.nova.core.agent.search.WebSearch
 import com.nova.core.search.ApifyWebSearch
 import com.nova.core.search.SearchActionExecutor
+import com.nova.core.agent.help.CapabilitiesActionExecutor
+import com.nova.feature.device.AndroidUrlOpener
+import com.nova.feature.device.MediaActionExecutor
 import com.nova.feature.memory.MemoryActionExecutor
 import com.nova.feature.memory.SqliteMemory
 import com.nova.feature.accessibility.AccessibilityActionExecutor
@@ -91,6 +94,9 @@ class NovaContainer(context: Context) {
     private val appRegistry by lazy { AppRegistry(appContext) }
 
     private val deviceController by lazy { DeviceController(appContext) }
+
+    /** Shared by playing media and by search when no API token is configured. */
+    private val urlOpener by lazy { AndroidUrlOpener(appContext) }
 
     /** Nova's eyes. Swapped for an OCR-backed reader later without touching anything else. */
     val screenReader: ScreenReader by lazy { AccessibilityScreenReader(appContext) }
@@ -200,7 +206,9 @@ class NovaContainer(context: Context) {
                 AccessibilityActionExecutor(screenReader),
                 MemoryActionExecutor(memory),
                 DiagnosticsActionExecutor(appContext, localModels, apiKeys, memory, routines),
-                SearchActionExecutor(webSearch),
+                SearchActionExecutor(webSearch, urlOpener),
+                MediaActionExecutor(urlOpener),
+                CapabilitiesActionExecutor(),
                 // Registered before the routine and notification executors only for
                 // readability; every action still has exactly one owner.
                 ConversationActionExecutor(chatClient, memory, webSearch),

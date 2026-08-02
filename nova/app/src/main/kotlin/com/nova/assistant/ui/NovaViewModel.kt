@@ -66,6 +66,13 @@ data class NovaUiState(
     val pendingPermission: RequiredPermission? = null,
     /** Non-null while the user is looking at what Raza has stored. */
     val library: LibraryState? = null,
+    /**
+     * True while the full capability list is open.
+     *
+     * The spoken answer to "what can you do" is short by design and points at the screen for
+     * the rest, so this has to actually appear or that answer is a lie.
+     */
+    val showCapabilities: Boolean = false,
 )
 
 class NovaViewModel(private val container: NovaContainer) : ViewModel() {
@@ -193,6 +200,11 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
                         steps = response.describeSteps(),
                     ),
                     pendingPermission = blocked?.permission,
+                    // Opened from the plan rather than the spoken reply, so it appears however
+                    // the question arrived — typed, spoken, or through the wake word.
+                    showCapabilities = response.plan.actions.any {
+                        it is NovaAction.ListCapabilities
+                    },
                 )
             }
 
@@ -259,6 +271,8 @@ class NovaViewModel(private val container: NovaContainer) : ViewModel() {
     }
 
     fun closeLibrary() = _state.update { it.copy(library = null) }
+
+    fun closeCapabilities() = _state.update { it.copy(showCapabilities = false) }
 
     fun forget(entry: MemoryEntry) {
         viewModelScope.launch {

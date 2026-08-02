@@ -73,6 +73,7 @@ fun NovaScreen(
     onChooseVoice: (com.nova.core.speech.VoiceOption) -> Unit,
     onOpenLibrary: () -> Unit,
     onCloseLibrary: () -> Unit,
+    onCloseCapabilities: () -> Unit,
     onForget: (com.nova.core.agent.memory.MemoryEntry) -> Unit,
     onDeleteRoutine: (com.nova.core.agent.routine.Routine) -> Unit,
     modifier: Modifier = Modifier,
@@ -93,6 +94,10 @@ fun NovaScreen(
             onDeleteRoutine = onDeleteRoutine,
             onClose = onCloseLibrary,
         )
+    }
+
+    if (state.showCapabilities) {
+        CapabilitiesSheet(onClose = onCloseCapabilities)
     }
 
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

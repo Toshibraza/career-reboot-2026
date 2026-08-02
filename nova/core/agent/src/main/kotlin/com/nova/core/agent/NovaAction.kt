@@ -115,6 +115,18 @@ sealed interface NovaAction {
 
     data object LockScreen : NovaAction
 
+    /**
+     * Play something — a song, a video, an artist.
+     *
+     * Distinct from [OpenApp]: "play Coke Studio" is not a request to launch YouTube and leave
+     * the user to type. Distinct from [SearchWeb] too, because the answer is meant to be
+     * watched rather than read aloud.
+     */
+    data class PlayMedia(val query: String) : NovaAction
+
+    /** Say what Raza can actually do. */
+    data object ListCapabilities : NovaAction
+
     data object TakeScreenshot : NovaAction
 
     /** Say something back to the user. Terminal action for chit-chat and confirmations. */

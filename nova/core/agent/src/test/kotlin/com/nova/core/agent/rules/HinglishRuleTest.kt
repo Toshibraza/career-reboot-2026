@@ -127,6 +127,21 @@ class HinglishRuleTest {
         assertTrue(parse("Amit ko message bhejo") is NovaAction.Unsupported)
     }
 
+    // --- Media ---------------------------------------------------------------------------
+
+    @Test
+    fun `playing something with the verb last`() {
+        assertEquals(NovaAction.PlayMedia("coke studio"), parse("coke studio chala do"))
+        assertEquals(NovaAction.PlayMedia("arijit singh"), parse("arijit singh bajao"))
+    }
+
+    @Test
+    fun `playing is not opening an app of that name`() {
+        // "Play Coke Studio" names something to watch. Sent to the app rules it becomes a
+        // search for an installed app called "Coke Studio", which does not exist.
+        assertEquals(NovaAction.PlayMedia("Coke Studio"), parse("play Coke Studio"))
+    }
+
     // --- Confirmation --------------------------------------------------------------------
 
     @Test

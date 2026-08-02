@@ -432,6 +432,39 @@ class RuleIntentEngine : IntentEngine {
                 NovaAction.Speak("I'm Raza, your assistant on this phone."),
             ),
 
+            // --- Help ----------------------------------------------------------------------
+            // Ahead of conversation, which would otherwise answer "what can you do" from the
+            // model — slowly, and with whatever it imagines rather than what is built.
+            // Matched against the *normalised* utterance, which is why "what do" appears here
+            // and "what can you do" does not. Utterance.normalise strips "can you" as
+            // politeness, so the sentence a user actually says never reaches a rule intact.
+            //
+            // Anchored end to end for the same reason: an unanchored "what do" would swallow
+            // "what do you think about X", which is conversation.
+            simpleRule(
+                "capabilities",
+                "^(?:help|commands|show( me)? (the )?commands|" +
+                    "what do|what all do|what do you do|what (?:all )?can i (?:say|ask)( you)?|" +
+                    "(?:tum |aap )?kya kar sakte ho|(?:tum |aap )?kya kar sakti ho)$",
+                NovaAction.ListCapabilities,
+            ),
+
+            // --- Media ---------------------------------------------------------------------
+            // Before the app rules: "play Coke Studio" names a thing to watch, not an app
+            // called "Coke Studio". Both languages, and both orders.
+            rule("play", "^play\\s+(.+)$|^(.+?)\\s+(?:chala ?do|chalao|baja ?do|bajao)$") {
+                if (it.contains(CHAINED)) return@rule null
+                // group() yields "" for the alternative that did not match, never null, so
+                // each candidate has to be tested for content rather than for nullity.
+                val query = (
+                    it.rawAfter("play")
+                        ?: it.group(1).takeIf(String::isNotBlank)
+                        ?: it.group(2).takeIf(String::isNotBlank)
+                    )?.trim()
+
+                query?.takeIf(String::isNotBlank)?.let { q -> listOf(NovaAction.PlayMedia(q)) }
+            },
+
             // --- Web search --------------------------------------------------------------
             // Explicit verbs only. "What is X" deliberately stays a memory lookup: asking
             // Raza what it knows should never quietly become a web request.

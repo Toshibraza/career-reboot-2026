@@ -172,6 +172,7 @@ class MainActivity : ComponentActivity() {
                     onChooseVoice = viewModel::chooseVoice,
                     onOpenLibrary = viewModel::openLibrary,
                     onCloseLibrary = viewModel::closeLibrary,
+                    onCloseCapabilities = viewModel::closeCapabilities,
                     onForget = viewModel::forget,
                     onDeleteRoutine = viewModel::deleteRoutine,
                 )
