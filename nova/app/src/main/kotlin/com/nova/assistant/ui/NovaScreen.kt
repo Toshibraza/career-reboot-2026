@@ -506,11 +506,13 @@ private fun EmptyHint(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
+        // One Hinglish example, because a feature nobody knows about may as well not exist —
+        // and seeing one is what tells someone the rest of their sentences will work too.
         listOf(
             "Open YouTube",
+            "YouTube kholo",
             "Turn on the flashlight",
-            "Set volume to 40 percent",
-            "Increase brightness",
+            "Awaaz kam karo",
         ).forEach {
             Text(
                 text = "“$it”",

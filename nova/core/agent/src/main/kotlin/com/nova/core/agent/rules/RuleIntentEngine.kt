@@ -37,10 +37,36 @@ class RuleIntentEngine : IntentEngine {
 
     private companion object {
 
-        /** Words meaning "raise" and "lower", shared by the volume and brightness rules. */
-        const val UP = "\\b(?:up|increase|raise|louder|higher|brighter)\\b"
-        const val DOWN = "\\b(?:down|decrease|lower|reduce|quieter|softer|dimmer|dim)\\b"
-        const val OFF = "\\b(?:off|disable|stop|kill|close|shut)\\b"
+        /**
+         * Words meaning "raise" and "lower", shared by the volume and brightness rules.
+         *
+         * Hinglish sits alongside English rather than in a separate engine. People switch
+         * languages mid-sentence — "volume thoda badhao" is one utterance, not two — and the
+         * recogniser already runs at en-IN, so romanised Hindi is what it returns. Splitting
+         * the two would mean deciding which language a sentence is in before parsing it, which
+         * is both harder and wrong for how it is actually spoken.
+         */
+        const val UP = "\\b(?:up|increase|raise|louder|higher|brighter|" +
+            "badhao|badha ?do|badhaao|tez karo|zyada karo)\\b"
+
+        const val DOWN = "\\b(?:down|decrease|lower|reduce|quieter|softer|dimmer|dim|" +
+            "kam karo|kam kar ?do|ghatao|ghata ?do|dheere karo|halka karo)\\b"
+
+        /**
+         * "Band" is the load-bearing word here — it is how almost everything gets switched off
+         * in spoken Hinglish, and it collides with nothing else this engine matches. It is
+         * only ever consulted once a noun like "torch" has already been recognised.
+         */
+        const val OFF = "\\b(?:off|disable|stop|kill|close|shut|" +
+            "band|bandh|bujha ?do|bujhao)\\b"
+
+        /**
+         * Nouns, kept separate from the verbs because word order differs between the two
+         * languages and only the nouns can be matched positionally.
+         */
+        const val VOLUME_NOUN = "\\b(?:volume|awaaz|aawaz|awaz|avaaz)\\b"
+        const val BRIGHTNESS_NOUN = "\\b(?:bright(?:ness)?|roshni|chamak)\\b"
+        const val TORCH_NOUN = "\\b(?:flash ?light|torch|batti|tarch)\\b"
 
         /**
          * Guard for rules that would otherwise steal an app launch. "open lock screen app" is
@@ -177,41 +203,81 @@ class RuleIntentEngine : IntentEngine {
                 listOf(NovaAction.CallContact(who))
             },
 
+            // The same two intents with the words the other way round. Hindi puts the object
+            // first and the verb last — "Amit ko call karo" is literally "Amit to call do" —
+            // so these cannot be folded into the rules above by adding alternatives; the
+            // capture group has to move.
+            rule("send-sms-hinglish", "\\bko\\b.*\\b(?:message|msg|sms|text)\\b") {
+                val match = SMS_HINGLISH.find(it.raw.trim()) ?: return@rule null
+                val who = match.groupValues[1].trim()
+                val what = match.groupValues[2].trim()
+
+                if (who.isBlank() || what.isBlank()) return@rule null
+                listOf(NovaAction.SendSms(who, what))
+            },
+
+            rule("call-hinglish", "\\bko\\b.*\\b(?:call|phone|fon|milao)\\b") {
+                // Raw, so a name keeps its capitals — it is read back before dialling, and
+                // "call amit kumar?" looks like a bug.
+                val who = CALL_HINGLISH.find(it.raw.trim())?.groupValues?.get(1)?.trim()
+                    ?: return@rule null
+
+                if (who.isBlank() || who.lowercase() in AMBIGUOUS_CALL_TARGETS) return@rule null
+                listOf(NovaAction.CallContact(who))
+            },
+
             simpleRule(
                 "confirm",
-                "^(?:yes|yeah|yep|confirm|do it|go ahead|send it|call (?:them|him|her))$",
+                "^(?:yes|yeah|yep|confirm|do it|go ahead|send it|call (?:them|him|her)|" +
+                    "haan|haa|ha|theek hai|kar do|karo)$",
                 NovaAction.ConfirmPending,
             ),
 
             simpleRule(
                 "cancel",
-                "^(?:no|nope|cancel|stop|never mind|nevermind|forget it)$",
+                "^(?:no|nope|cancel|stop|never mind|nevermind|forget it|" +
+                    "nahi|nahin|na|rehne do|mat karo|chodo)$",
                 NovaAction.CancelPending,
             ),
 
             // --- Torch -------------------------------------------------------------------
             // Registered first among the direct commands: "close the torch" must not reach
             // the close-app rule.
-            rule("flashlight", "\\b(?:flash ?light|torch)\\b") {
+            rule("flashlight", TORCH_NOUN) {
                 listOf(NovaAction.SetFlashlight(on = !it.contains(OFF)))
             },
 
             // --- Volume ------------------------------------------------------------------
-            rule("volume-set", "\\bvolume\\b.*\\b(?:to|at)\\b|\\bset\\b.*\\bvolume\\b") {
+            // The third alternative carries Hinglish, which states a percentage with no
+            // preposition at all — "awaaz 40 percent karo". Matching a bare number instead
+            // would swallow "volume up 10" and turn a nudge into an absolute setting.
+            rule(
+                "volume-set",
+                "$VOLUME_NOUN.*\\b(?:to|at|par|pe)\\b|\\bset\\b.*$VOLUME_NOUN|" +
+                    "$VOLUME_NOUN.*\\d+\\s*(?:%|percent|pratishat)",
+            ) {
                 val percent = Numbers.firstIn(it.text) ?: return@rule null
                 listOf(NovaAction.SetVolume(streamIn(it.text), LevelChange.Absolute(percent)))
             },
 
-            rule("volume-max", "\\b(?:max|maximum|full)\\b") {
-                if (!it.contains("\\bvolume\\b")) return@rule null
+            rule("volume-max", "\\b(?:max|maximum|full|pura|poora)\\b") {
+                if (!it.contains(VOLUME_NOUN)) return@rule null
                 listOf(NovaAction.SetVolume(streamIn(it.text), LevelChange.Max))
             },
 
-            rule("volume-mute", "\\b(?:mute|silence|silent)\\b") {
+            // Silencing is switching the volume off, in both languages. Without the OFF arm,
+            // "awaaz band karo" fell past every volume rule and was read as a request to close
+            // an app called "awaaz" — and "turn off the volume" was not understood at all.
+            // Both orders, because the two languages put the noun on opposite sides of the
+            // verb: "awaaz band karo" against "turn off the volume".
+            rule(
+                "volume-mute",
+                "\\b(?:mute|silence|silent|chup)\\b|$VOLUME_NOUN.*$OFF|$OFF.*$VOLUME_NOUN",
+            ) {
                 listOf(NovaAction.SetVolume(streamIn(it.text), LevelChange.Min))
             },
 
-            rule("volume-step", "\\bvolume\\b|\\b(?:louder|quieter|softer)\\b") {
+            rule("volume-step", "$VOLUME_NOUN|\\b(?:louder|quieter|softer)\\b") {
                 val delta = when {
                     it.contains(UP) -> 10
                     it.contains(DOWN) -> -10
@@ -221,12 +287,12 @@ class RuleIntentEngine : IntentEngine {
             },
 
             // --- Brightness --------------------------------------------------------------
-            rule("brightness-set", "\\bbrightness\\b.*\\b(?:to|at)\\b|\\bset\\b.*\\bbrightness\\b") {
+            rule("brightness-set", "$BRIGHTNESS_NOUN.*\\b(?:to|at)\\b|\\bset\\b.*$BRIGHTNESS_NOUN") {
                 val percent = Numbers.firstIn(it.text) ?: return@rule null
                 listOf(NovaAction.SetBrightness(LevelChange.Absolute(percent)))
             },
 
-            rule("brightness-step", "\\bbright(?:ness)?\\b|\\bdim\\b") {
+            rule("brightness-step", "$BRIGHTNESS_NOUN|\\bdim\\b") {
                 val delta = when {
                     it.contains(UP) -> 20
                     it.contains(DOWN) -> -20
@@ -333,6 +399,22 @@ class RuleIntentEngine : IntentEngine {
             },
 
             rule("open-app", "^(?:open|launch|start|run|go to|switch to)\\s+(?:the\\s+)?(.+?)(?:\\s+app)?$") {
+                if (it.contains(CHAINED)) return@rule null
+                it.group(1).takeIf(String::isNotBlank)?.let { app -> listOf(NovaAction.OpenApp(app)) }
+            },
+
+            // Object first, verb last. Registered after the English forms and after every
+            // device rule, so "torch band karo" is still the torch rather than an app called
+            // "torch", exactly as "close the torch" already was.
+            rule("close-app-hinglish", "^(.+?)\\s+(?:band|bandh)\\s+kar(?:o|do| do| dijiye)$") {
+                it.group(1).takeIf(String::isNotBlank)?.let { app -> listOf(NovaAction.CloseApp(app)) }
+            },
+
+            rule(
+                "open-app-hinglish",
+                "^(.+?)\\s+(?:kholo|khol ?do|kholiye|chalu kar(?:o|do| do)|" +
+                    "shuru kar(?:o|do| do)|open kar(?:o|do| do))$",
+            ) {
                 if (it.contains(CHAINED)) return@rule null
                 it.group(1).takeIf(String::isNotBlank)?.let { app -> listOf(NovaAction.OpenApp(app)) }
             },
@@ -474,6 +556,31 @@ class RuleIntentEngine : IntentEngine {
 
         val SMS_SINGLE_WORD_NAME = Regex(
             "^(?:text|message|sms)\\s+(\\S+)\\s+(.+)$",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /**
+         * "Amit ko message bhejo ki main late hoon."
+         *
+         * The content marker is required, as it is in English. Without "ki" or "bolo ki" there
+         * is nothing separating the name from the message, and a wrong split there sends a
+         * real message to the wrong person.
+         */
+        val SMS_HINGLISH = Regex(
+            "^(.+?)\\s+ko\\s+(?:message|msg|sms|text)\\s+(?:bhej(?:o|do| do)|kar(?:o|do| do))" +
+                "\\s+(?:ki|kah(?:o|do) ki|bol(?:o|do| do) ki)\\s+(.+)$",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /**
+         * "Amit ko call karo", "Mummy ko phone lagao", "Amit ko milao".
+         *
+         * One capture group across every form on purpose — two alternatives each with their
+         * own group would leave the caller reading an empty string whenever the other branch
+         * matched.
+         */
+        val CALL_HINGLISH = Regex(
+            "^(.+?)\\s+ko\\s+(?:(?:call|phone|fon)\\s+(?:kar(?:o|do| do)|lag(?:ao|a ?do))|milao)$",
             RegexOption.IGNORE_CASE,
         )
 
