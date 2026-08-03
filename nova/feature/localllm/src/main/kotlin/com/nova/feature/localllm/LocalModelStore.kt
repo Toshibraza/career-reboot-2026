@@ -46,18 +46,27 @@ class LocalModelStore(context: Context) {
     /**
      * Whether loading is worth attempting.
      *
-     * Weights have to be resident, plus room for the KV cache and the runtime, so the rule of
-     * thumb is roughly one and a half times the file size. Attempting a load that cannot fit
-     * does not fail cleanly — it drives the device into memory pressure and gets Nova killed.
+     * This used to demand one and a half times the file size, on the reasoning that weights have
+     * to be resident. Two measurements from this project say file size does not predict runtime
+     * footprint in either direction:
+     *
+     * - Qwen 1.5B is about 1.1 GB on disk and wanted roughly 2.3 GB to run — twice the rule.
+     * - Gemma 3n E2B is 3.1 GB on disk and is built to run in about 2 GB, because its per-layer
+     *   embeddings are streamed rather than held resident. The old rule demanded 4.7 GB and
+     *   refused a model designed to fit.
+     *
+     * A single multiplier over file size cannot describe both, so it no longer tries. What
+     * remains is a floor: below this there is no plausible working set for any model worth
+     * running, and attempting it risks the memory pressure that gets Nova killed. Above it, the
+     * loader is the only thing that actually knows, and it is allowed to answer.
      */
     fun status(): ModelStatus {
         if (!isInstalled()) return ModelStatus.NotInstalled
 
-        val needed = (sizeBytes() * MEMORY_HEADROOM).toLong()
         val available = availableMemoryBytes()
 
-        return if (available < needed) {
-            ModelStatus.TooLittleMemory(needed = needed, available = available)
+        return if (available < MINIMUM_AVAILABLE_BYTES) {
+            ModelStatus.TooLittleMemory(needed = MINIMUM_AVAILABLE_BYTES, available = available)
         } else {
             ModelStatus.Ready(sizeBytes())
         }
@@ -66,7 +75,15 @@ class LocalModelStore(context: Context) {
     private companion object {
         const val DIRECTORY = "llm"
         const val FILE_NAME = "model.task"
-        const val MEMORY_HEADROOM = 1.5
+
+        /**
+         * Free memory below which no on-device model is worth attempting.
+         *
+         * Chosen from the smallest footprint any of these models has actually been observed to
+         * need, not from the file on disk. It is a guard against a hopeless attempt, not a
+         * prediction that a given model will fit.
+         */
+        const val MINIMUM_AVAILABLE_BYTES = 1_500L * 1024 * 1024
     }
 }
 
