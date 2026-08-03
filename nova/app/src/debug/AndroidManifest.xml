@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <application>
+    <!--
+        A model server on the local network — LM Studio, Ollama, llama.cpp — speaks plain HTTP
+        on a LAN address. From targetSdk 28 Android refuses cleartext by default, which is the
+        right default: it is what stops an app quietly sending a user's data over a network
+        anyone can read.
+
+        That protection is kept for release. Lifting it here covers the debug variant only, so a
+        model can be reached on your own WiFi without the shipped app ever being allowed to talk
+        in the clear. Wanting this in a release build means terminating TLS at the server or
+        tunnelling it, not copying this attribute across.
+    -->
+    <application android:usesCleartextTraffic="true">
         <!--
             Test hook for driving commands over adb without touching the foreground.
             Debug source set only, so it is absent from release builds entirely rather than

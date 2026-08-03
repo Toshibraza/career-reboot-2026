@@ -185,6 +185,33 @@ class NovaContainer(context: Context) {
     }
 
     /**
+     * A model served from the local network, if one is configured.
+     *
+     * LM Studio, Ollama and llama.cpp's server all speak the OpenAI chat API, so the existing
+     * client reaches them by changing one URL. The point is capacity: this phone reports 5.7 GB
+     * of RAM and under 2 GB actually available, which rules out anything past a small model,
+     * while a desktop on the same WiFi runs an 8B comfortably.
+     *
+     * Not rate limited, unlike the API. The limiter exists because requests cost money and a
+     * routine could fire a task unattended; a machine in the next room costs electricity.
+     *
+     * The model name is whatever the server has loaded. LM Studio serves the loaded model
+     * regardless of what is asked for, so this is a label rather than a selector.
+     */
+    private val lanClient: ChatClient? by lazy {
+        BuildConfig.LLM_SERVER_URL.trim().takeIf { it.isNotEmpty() }?.let { base ->
+            OpenAiClient(
+                apiKey = { "local" },
+                model = "local-model",
+                endpoint = "${base.trimEnd('/')}/v1/chat/completions",
+                // Generous next to the API's 30s: an 8B model on a desktop CPU takes its time
+                // over a first token, and the failure to avoid is giving up on a good answer.
+                timeoutMillis = 120_000,
+            )
+        }
+    }
+
+    /**
      * Gemma on the phone is the model. The API is a stand-in for when it is missing.
      *
      * Chosen per request, so side-loading a model takes effect on the next command.
@@ -202,6 +229,10 @@ class NovaContainer(context: Context) {
     private val chatClient: ChatClient = object : ChatClient {
         override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String {
             if (localModels.isInstalled()) return localClient.complete(system, user, schema)
+
+            // Before the API but after the phone's own model: still the user's hardware and
+            // still nothing leaving their network, and far larger than the phone can hold.
+            lanClient?.let { return it.complete(system, user, schema) }
 
             if (!apiKeys.hasKey()) throw ModelUnavailableException(NO_MODEL)
 

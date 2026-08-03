@@ -23,6 +23,15 @@ val openAiApiKey: String = localProperties.getProperty("openai.apiKey").orEmpty(
 /** Optional. Absent simply means web search is unavailable; everything else works. */
 val apifyToken: String = localProperties.getProperty("apify.token").orEmpty().trim()
 
+/**
+ * An OpenAI-compatible server on the local network — LM Studio, Ollama, llama.cpp's server.
+ *
+ * Base URL only, e.g. `http://192.168.1.2:1234`. Absent falls back to the on-device model and
+ * then to OpenAI, so this is purely additive. A machine on the same WiFi can hold a model far
+ * larger than a phone has memory for, which is the whole point.
+ */
+val llmServerUrl: String = localProperties.getProperty("llm.serverUrl").orEmpty().trim()
+
 android {
     namespace = "com.nova.assistant"
     compileSdk = 36
@@ -40,6 +49,7 @@ android {
 
         buildConfigField("String", "OPENAI_API_KEY", "\"$openAiApiKey\"")
         buildConfigField("String", "APIFY_TOKEN", "\"$apifyToken\"")
+        buildConfigField("String", "LLM_SERVER_URL", "\"$llmServerUrl\"")
     }
 
     buildTypes {
