@@ -87,8 +87,16 @@ class NovaContainer(context: Context) {
      * suggests someone is actually speaking. See [GatedWakeWordDetector] for what this still
      * does not solve.
      */
+    /**
+     * Continuous, not gated.
+     *
+     * The gate saved battery by only starting recognition once someone spoke — and in doing so
+     * guaranteed the wake word was already over by the time anything was listening. Every wake
+     * attempt on this device failed with NO_MATCH for that reason. Hearing the user is worth
+     * more than the battery it saves.
+     */
     val wakeWordDetector: WakeWordDetector by lazy {
-        GatedWakeWordDetector(speechToText, echoGuard = echoGuard)
+        GatedWakeWordDetector(speechToText, gate = null, echoGuard = echoGuard)
     }
 
     private val appRegistry by lazy { AppRegistry(appContext) }

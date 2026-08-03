@@ -24,6 +24,21 @@ class AndroidSpeechToText(context: Context) : SpeechToText {
 
     private val appContext = context.applicationContext
 
+    /**
+     * One recogniser, reused for every session.
+     *
+     * Creating one per session cost a measured 660ms on the target phone before the microphone
+     * went live, on top of ~390ms of the engine loading its language pack — so the first full
+     * second of speech was recorded by nobody. For a wake word that is fatal: "Raza" is over in
+     * about half that time, so the word was finished before anything was listening and the
+     * engine reported NO_MATCH on the silence that followed.
+     *
+     * Only ever touched from the main looper, which [SpeechRecognizer] requires anyway, so no
+     * further synchronisation is needed. Never destroyed: this lives as long as the process,
+     * and the recogniser holds no microphone between sessions.
+     */
+    private var recognizer: SpeechRecognizer? = null
+
     override val isAvailable: Boolean
         get() = SpeechRecognizer.isRecognitionAvailable(appContext)
 
@@ -34,7 +49,9 @@ class AndroidSpeechToText(context: Context) : SpeechToText {
             return@callbackFlow
         }
 
-        val recognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
+        val recognizer = this@AndroidSpeechToText.recognizer
+            ?: SpeechRecognizer.createSpeechRecognizer(appContext)
+                .also { this@AndroidSpeechToText.recognizer = it }
 
         // Distinguishes "the session ended on its own" from "the collector walked away".
         // Only the latter needs cancelling; cancelling a finished session logs
@@ -108,10 +125,9 @@ class AndroidSpeechToText(context: Context) : SpeechToText {
             }
 
         awaitClose {
-            runCatching {
-                if (!finished) recognizer.cancel()
-                recognizer.destroy()
-            }
+            // Cancelled, never destroyed. Destroying is what forced the next session to rebuild
+            // the engine from scratch, and cancel() already releases the microphone.
+            runCatching { if (!finished) recognizer.cancel() }
         }
     }.flowOn(Dispatchers.Main.immediate)
 

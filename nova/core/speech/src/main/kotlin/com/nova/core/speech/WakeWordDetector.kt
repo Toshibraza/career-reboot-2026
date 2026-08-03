@@ -37,7 +37,21 @@ interface WakeWordDetector {
  */
 class GatedWakeWordDetector(
     private val speechToText: SpeechToText,
-    private val gate: VoiceActivityGate = VoiceActivityGate(),
+    /**
+     * Null runs recognition continuously instead of waiting for speech onset.
+     *
+     * The gate cannot hear the word that triggers it. It detects the onset, releases the
+     * microphone, and the recogniser takes over — measured at ~390ms on the target phone even
+     * with the engine kept warm, and over a second before it was. "Raza" is finished inside
+     * that window, so the recogniser only ever received the silence afterwards and reported
+     * NO_MATCH. Every wake attempt failed this way; the log is unambiguous.
+     *
+     * Continuous recognition costs battery, which is exactly what the gate existed to save.
+     * That trade only made sense while the gate worked. A purpose-built keyword spotter reading
+     * the gate's own PCM is the real answer and remains the honest limitation below — the
+     * platform recogniser cannot be fed buffered audio, so the onset cannot be replayed to it.
+     */
+    private val gate: VoiceActivityGate? = VoiceActivityGate(),
     override val phrase: String = "raza",
     private val languageTag: String = "en-IN",
     /** Breathing room so one holder has fully released the microphone before the next opens it. */
@@ -86,8 +100,10 @@ class GatedWakeWordDetector(
         while (true) {
             // Collected only until the first speech onset, so the gate releases the microphone
             // before the recogniser needs it.
-            gate.speechStarts().first()
-            delay(handoverDelayMillis)
+            gate?.let {
+                it.speechStarts().first()
+                delay(handoverDelayMillis)
+            }
 
             if (heardWakePhrase()) {
                 Log.i(TAG, "wake phrase heard")
