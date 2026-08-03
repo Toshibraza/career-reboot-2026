@@ -9,7 +9,10 @@ import com.nova.core.agent.rules.RuleIntentEngine
 import com.nova.core.agent.task.TaskPlanner
 import com.nova.core.llm.ChatClient
 import com.nova.core.llm.OpenAiClient
+import com.nova.core.llm.ModelUnavailableException
 import com.nova.core.llm.RateLimitedChatClient
+import com.nova.core.llm.spokenLlmFailure
+import java.io.IOException
 import com.nova.core.llm.ResponseSchema
 import com.nova.core.llm.ConversationActionExecutor
 import com.nova.core.llm.LlmTaskPlanner
@@ -182,7 +185,7 @@ class NovaContainer(context: Context) {
     }
 
     /**
-     * On-device model if one is installed, otherwise the API.
+     * Gemma on the phone is the model. The API is a stand-in for when it is missing.
      *
      * Chosen per request, so side-loading a model takes effect on the next command.
      *
@@ -190,14 +193,24 @@ class NovaContainer(context: Context) {
      * model on their phone did it so their screen contents stay on their phone; quietly posting
      * that screen to an API because the local model ran out of memory would betray exactly the
      * choice they made. The failure is reported instead.
+     *
+     * When Gemma is absent the API's own diagnosis is kept and the missing model is named after
+     * it. "My OpenAI account is out of credit" is true but points at the wrong repair: adding
+     * credit to an account is not what this assistant is supposed to need, and someone hearing
+     * only that would go and pay for it.
      */
     private val chatClient: ChatClient = object : ChatClient {
-        override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String =
-            if (localModels.isInstalled()) {
-                localClient.complete(system, user, schema)
-            } else {
+        override suspend fun complete(system: String, user: String, schema: ResponseSchema?): String {
+            if (localModels.isInstalled()) return localClient.complete(system, user, schema)
+
+            if (!apiKeys.hasKey()) throw ModelUnavailableException(NO_MODEL)
+
+            return try {
                 cloudClient.complete(system, user, schema)
+            } catch (failure: IOException) {
+                throw ModelUnavailableException("${failure.spokenLlmFailure()} $NO_MODEL")
             }
+        }
     }
 
     private val taskPlanner: TaskPlanner by lazy { LlmTaskPlanner(chatClient) }
@@ -236,4 +249,16 @@ class NovaContainer(context: Context) {
             },
         )
     }
+
+    private companion object {
+        /**
+         * Said aloud, so it names the one action that fixes this rather than describing the
+         * problem. The path is the app's own external directory, which is writable over adb
+         * without root — and, unavoidably, is also wiped by an uninstall.
+         */
+        const val NO_MODEL =
+            "Raza runs on Gemma on this phone. Push a Gemma task file to Android, data, " +
+                "com dot nova dot assistant, files, l l m, model dot task."
+    }
+
 }
