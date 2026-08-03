@@ -69,7 +69,11 @@ class MainActivity : ComponentActivity() {
                 }
                 val boundService by NovaAccessibilityService.connection.collectAsState()
                 val accessibilityEnabled = accessibilityInSettings || boundService != null
-                var alwaysListening by remember { mutableStateOf(NovaListeningService.isRunning) }
+                // The stored wish, not the running process. isRunning only says whether the
+                // service is up this instant, so reading it made every reinstall — and every
+                // time Android reclaimed the process — quietly turn always-listening off.
+                val listeningPreference = remember { ListeningPreference(this@MainActivity) }
+                var alwaysListening by remember { mutableStateOf(listeningPreference.wanted()) }
                 var resumeCount by remember { mutableIntStateOf(0) }
 
                 val container = (application as NovaApplication).container
@@ -105,7 +109,17 @@ class MainActivity : ComponentActivity() {
                             micGranted = hasMicPermission()
                             accessibilityInSettings =
                                 NovaAccessibilityService.isEnabled(this@MainActivity)
-                            alwaysListening = NovaListeningService.isRunning
+                            alwaysListening = listeningPreference.wanted()
+
+                            // Restart it if it was wanted but is not up — the usual cause is a
+                            // reinstall, which is exactly when the user is least expecting to
+                            // have lost it.
+                            if (alwaysListening &&
+                                !NovaListeningService.isRunning &&
+                                micGranted
+                            ) {
+                                NovaListeningService.start(this@MainActivity)
+                            }
                             resumeCount++
                         }
                     }
@@ -150,6 +164,7 @@ class MainActivity : ComponentActivity() {
                     onDismissPermissionPrompt = viewModel::dismissPermissionPrompt,
                     onAlwaysListeningChange = { enabled ->
                         alwaysListening = enabled
+                        listeningPreference.setWanted(enabled)
                         if (enabled) {
                             NovaListeningService.start(context)
                         } else {

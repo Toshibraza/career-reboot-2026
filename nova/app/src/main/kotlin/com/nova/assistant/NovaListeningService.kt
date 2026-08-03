@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.nova.core.agent.NovaAction
 import com.nova.core.speech.SpeechEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,51 +62,92 @@ class NovaListeningService : Service() {
         }
     }
 
+    /**
+     * One waking, then as many follow-ups as the user keeps giving.
+     *
+     * Requiring the wake word before every single command is not how people talk to this. The
+     * device log is unambiguous: after "open YouTube" succeeded, the next three things said
+     * were "minimise YouTube", "close YouTube" and "close YouTube" — every one of them a
+     * command, every one discarded for not containing "Raza".
+     *
+     * The window closes on the first thing that is not a command, so an assistant left alone in
+     * a room falls back to needing its name rather than acting on the conversation around it.
+     */
     private suspend fun handleOneCommand() {
         container.speaker.speak("Yes?")
 
+        var turn = 0
+        while (turn < MAX_TURNS) {
+            val utterance = listenForCommand()
+
+            if (utterance == null) {
+                // Only worth saying the first time. After a command has run, silence means the
+                // user has finished, and announcing that would be Raza talking to itself.
+                if (turn == 0) container.speaker.speak("I didn't catch that.")
+                return
+            }
+
+            Log.i(TAG, "command: \"$utterance\"")
+
+            // Repeated back before acting. With no screen in front of them the user has no
+            // other way to know what was understood, and hearing the wrong command before it
+            // happens is the difference between catching a mistake and discovering it after.
+            container.speaker.speak("You said, $utterance")
+
+            if (!runCommand(utterance)) return
+            turn++
+        }
+    }
+
+    /** Null when nothing usable was heard: silence, no match, or Raza's own voice. */
+    private suspend fun listenForCommand(): String? {
         // The speaker reports "done" when it stops writing audio, not when the room stops
         // carrying it. Opening the microphone on that same instant is what makes Raza hear its
         // own prompt. The wake detector already waits this long between microphone handovers;
         // this path was the one that did not.
         delay(MIC_SETTLE_MILLIS)
 
-        val utterance = container.speechToText.transcribe()
+        val heard = container.speechToText.transcribe()
             .mapNotNull { (it as? SpeechEvent.Final)?.text }
             .firstOrNull()
 
-        if (utterance.isNullOrBlank()) {
-            Log.i(TAG, "woke, but heard no command")
-            container.speaker.speak("I didn't catch that.")
-            return
+        if (heard.isNullOrBlank()) {
+            Log.i(TAG, "heard no command")
+            return null
         }
 
-        if (container.echoGuard.isEcho(utterance)) {
+        if (container.echoGuard.isEcho(heard)) {
             // Not spoken to. Answering would say something new, which would be heard in turn —
             // the loop this exists to break.
-            Log.i(TAG, "ignored \"$utterance\" — that was Raza hearing itself")
-            return
+            Log.i(TAG, "ignored \"$heard\" — that was Raza hearing itself")
+            return null
         }
 
-        Log.i(TAG, "command: \"$utterance\"")
+        return heard
+    }
 
-        // Repeated back before acting. With no screen in front of them the user has no other
-        // way to know what was understood, and hearing the wrong command before it happens is
-        // the difference between catching a mistake and discovering it afterwards.
-        container.speaker.speak("You said, $utterance")
+    /** False when the follow-up window should close. */
+    private suspend fun runCommand(utterance: String): Boolean = coroutineScope {
+        var understood = false
 
         // The command runs as a child job registered with the container, so the orb's stop
         // control can cancel it. Cancelling the child ends the command; the wake-word loop
         // above survives and keeps listening.
-        coroutineScope {
-            val command = launch {
-                val response = container.runtime.handle(utterance)
-                Log.i(TAG, "-> ${response.spoken}")
-                container.speaker.speak(response.spoken)
-            }
-            container.activeCommands.track(command)
-            command.join()
+        val command = launch {
+            val response = container.runtime.handle(utterance)
+            Log.i(TAG, "-> ${response.spoken}")
+
+            // Only a command Raza actually understood keeps the microphone open. Anything else
+            // is as likely to be the room as the user, and staying open would turn overheard
+            // conversation into actions.
+            understood = response.plan.actions.none { it is NovaAction.Unsupported }
+
+            container.speaker.speak(response.spoken)
         }
+        container.activeCommands.track(command)
+        command.join()
+
+        understood
     }
 
     private fun startForegroundWithNotification() {
@@ -166,6 +208,15 @@ class NovaListeningService : Service() {
          * to fall quiet, short enough that the user is not left waiting after "Yes?".
          */
         private const val MIC_SETTLE_MILLIS = 250L
+
+        /**
+         * Commands accepted per waking, including the first.
+         *
+         * A cap rather than "until silence" because each turn holds the microphone open, and a
+         * run of recognised commands in a busy room should still end on its own. Six is more
+         * than anyone strings together in one breath and short enough to be a bounded loop.
+         */
+        private const val MAX_TURNS = 6
 
         /**
          * Read by the UI to render the toggle. Good enough while exactly one activity and one
