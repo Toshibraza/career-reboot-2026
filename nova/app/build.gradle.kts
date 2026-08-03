@@ -34,6 +34,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
+        // On-device tests are the only way to exercise this app on the target phone: MIUI
+        // refuses shell input injection, so the UI cannot be driven from adb.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         buildConfigField("String", "OPENAI_API_KEY", "\"$openAiApiKey\"")
         buildConfigField("String", "APIFY_TOKEN", "\"$apifyToken\"")
     }
@@ -88,4 +92,8 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
 }
